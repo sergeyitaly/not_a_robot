@@ -48,14 +48,35 @@
       <h3>This run's 20 tests (scored before retraining)</h3>
       <p class="result-note">
         <code>sophisticated</code> reuses the human archetype's mouse and
-        keyboard behavior by design (see the main README). Expect some of
-        the 2 sophisticated rows below to score above the 50% line most
-        runs, sometimes confidently so -- that's the documented ceiling on
-        purely behavioral detection, not a bug in this demo.
+        keyboard behavior by design (see the main README). It's drawn at
+        its design weight (10% of bots, so 0-2 rows most runs, sometimes
+        more) -- expect some of them to score above the 50% line,
+        sometimes confidently so. That's the documented ceiling on purely
+        behavioral detection, not a bug in this demo.
       </p>
       <table id="results-table" class="history-table">
         <thead>
           <tr><th>Archetype</th><th>True label</th><th>Score (P human)</th></tr>
+        </thead>
+        <tbody></tbody>
+      </table>
+
+      <h3>Environment checks (separate, deterministic layer)</h3>
+      <p class="result-note">
+        <code>not_a_robot.environment</code> checks browser-observable
+        automation artifacts -- <code>navigator.webdriver</code>,
+        Selenium's <code>cdc_*</code> globals, Playwright/Puppeteer
+        markers, software-rendered WebGL. It's not part of the behavioral
+        model above; these are fixed, illustrative scenarios (not
+        generated per run) run through the real
+        <code>score_environment()</code> function. Look at the last row:
+        it's identical, signal-for-signal, to the clean-browser scenario
+        -- a stealth-patched bot passes every check here by design. That's
+        exactly the gap the behavioral model above exists to cover.
+      </p>
+      <table id="environment-table" class="history-table">
+        <thead>
+          <tr><th>Scenario</th><th>Automated?</th><th>Reason(s)</th></tr>
         </thead>
         <tbody></tbody>
       </table>

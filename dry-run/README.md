@@ -5,7 +5,10 @@ this actually work": generates 20 synthetic sessions across every
 archetype the library ships (naive/evasive/headless/sophisticated bots,
 and humans), each with its real, known label from the generator itself,
 scores and records each against a live `not_a_robot.AutoRetrainStore`,
-retrains, and reports the actual accuracy/human-pass/bot-catch numbers.
+retrains, reports the actual accuracy/human-pass/bot-catch numbers, and
+separately runs the deterministic `not_a_robot.environment` checks
+against a handful of fixed scenarios so both detection layers are
+exercised, not just the behavioral one.
 
 ## Run it
 
@@ -37,22 +40,42 @@ package, so it's only available from this checkout.
 `dry-run/app.py` is a thin Flask wrapper around the library -- the
 button drives real calls, not a mock:
 
-1. Generates 20 sessions (4 each of human/naive/evasive/headless/
-   sophisticated) via `examples/synthetic_data.py`'s archetype
-   generators. Each one's label is the generator's own ground truth, not
-   self-declared -- `label=True` for the human archetype, `False` for
-   every bot archetype.
+1. Generates 20 sessions via `examples.synthetic_data.make_synthetic_dataset()`
+   -- the same function the CLI's `--synthetic` mode and the README's own
+   benchmark use, so the archetype mix always matches the library's real
+   design weights (45/35/10/10 naive/evasive/headless/sophisticated,
+   50/50 human/bot). An earlier version of this demo picked a fixed
+   per-archetype count by hand, which silently drifted from those
+   weights; delegating to the library's own generator makes that class of
+   bug structurally impossible. Each session's label is the generator's
+   own ground truth, not self-declared -- `label=True` for the human
+   archetype, `False` for every bot archetype.
 2. Scores each with the currently deployed model (`store.score()`), then
    records it (`store.record_session()`).
 3. Once the batch is in, forces a retrain (`store.maybe_retrain(force=True)`):
    fits a fresh `BotDetector` on every session recorded so far and
    redeploys it.
-4. Reports the retrain's real numbers: total sessions trained on, and
-   the accuracy / human-pass-rate / bot-catch-rate ranges from
+4. Reports the retrain's real numbers: total sessions trained on, the
+   accuracy / human-pass-rate / bot-catch-rate ranges from
    `not_a_robot`'s own multi-seed `evaluate_cv` (see the main
    [README's Training pipeline section](../README.md#training-pipeline-and-success-rate-validation)
    for what those ranges mean and why they're reported as ranges, not
-   single numbers), plus the 20 individual test scores from this run.
+   single numbers), the store's full cumulative label/archetype
+   composition (`AutoRetrainStore.label_composition()` /
+   `.group_composition()` -- printed so a future composition bug is
+   visible immediately instead of requiring someone to export and
+   inspect the session log by hand), and the 20 individual test scores
+   from this run.
+5. Separately, runs `not_a_robot.environment.score_environment()` against
+   five fixed scenarios (clean browser, unpatched Selenium, headless
+   without GPU passthrough, a Playwright/Puppeteer marker left in place,
+   and a stealth-patched Selenium session) and reports each one's
+   automated/not-automated verdict and reasons. This is a **separate
+   table, not merged into the behavioral results** -- see the main
+   README's [Deterministic automation checks section](../README.md#deterministic-automation-checks-separate-from-the-behavioral-model)
+   for why. The stealth-patched scenario is deliberately identical,
+   signal-for-signal, to the clean-browser one: that's the honest limit
+   of this layer, not a demo bug.
 
 ## Beyond the button
 

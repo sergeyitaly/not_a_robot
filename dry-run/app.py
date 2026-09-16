@@ -23,6 +23,7 @@ from pathlib import Path
 from flask import Flask, jsonify, request, send_from_directory
 
 from not_a_robot import AutoRetrainStore
+from not_a_robot.environment import EnvironmentSignals, score_environment
 from not_a_robot.io import session_from_dict, session_to_dict
 
 # Reaches into the demo generator's private archetype functions on
@@ -56,6 +57,47 @@ _ARCHETYPES = {
     "headless": _bot_headless_session,
     "sophisticated": _bot_sophisticated_session,
 }
+
+_REAL_GPU_RENDERER = "NVIDIA GeForce RTX 3080/PCIe/SSE2"
+
+# Fixed, illustrative scenarios for the separate deterministic layer --
+# not randomly generated, since the point is to show specific, named
+# situations, not a statistical sample. The last one is deliberately
+# identical (from this module's point of view) to the clean-browser
+# scenario: that's not a bug in the demo, it's the honest limit
+# score_environment() documents -- a stealth-patched bot passes every
+# check here on purpose.
+_ENVIRONMENT_SCENARIOS = [
+    (
+        "Clean browser",
+        EnvironmentSignals(
+            webdriver_flag=False,
+            cdc_properties_present=False,
+            automation_globals_present=False,
+            webgl_renderer=_REAL_GPU_RENDERER,
+        ),
+    ),
+    (
+        "Unpatched Selenium",
+        EnvironmentSignals(webdriver_flag=True, cdc_properties_present=True),
+    ),
+    (
+        "Headless Chrome, no GPU passthrough",
+        EnvironmentSignals(webdriver_flag=True, webgl_renderer="Google SwiftShader"),
+    ),
+    (
+        "Playwright/Puppeteer, automation global left in place",
+        EnvironmentSignals(automation_globals_present=True),
+    ),
+    (
+        "Stealth-patched Selenium",
+        EnvironmentSignals(
+            webdriver_flag=False,
+            cdc_properties_present=False,
+            webgl_renderer=_REAL_GPU_RENDERER,
+        ),
+    ),
+]
 
 
 def _seed_baseline() -> None:
@@ -203,12 +245,23 @@ def run_tests():
 
     retrain_result = store.maybe_retrain(force=True)
 
+    environment_results = [
+        {
+            "scenario": name,
+            "is_automated": (report := score_environment(signals)).is_automated,
+            "reasons": report.reasons,
+            "checked": report.checked,
+        }
+        for name, signals in _ENVIRONMENT_SCENARIOS
+    ]
+
     return jsonify(
         {
             "results": results,
             "retrain": retrain_result,
             "label_composition": store.label_composition(),
             "group_composition": store.group_composition(),
+            "environment_results": environment_results,
         }
     )
 

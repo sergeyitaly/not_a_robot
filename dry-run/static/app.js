@@ -22,6 +22,15 @@
     tbody.appendChild(row);
   }
 
+  function addEnvironmentRow(scenario, isAutomated, reasons) {
+    const tbody = document.querySelector("#environment-table tbody");
+    const row = document.createElement("tr");
+    const verdict = isAutomated ? "yes" : "no";
+    const reasonText = reasons.length ? reasons.join("; ") : "--";
+    row.innerHTML = `<td>${scenario}</td><td>${verdict}</td><td>${reasonText}</td>`;
+    tbody.appendChild(row);
+  }
+
   function formatComposition(labelComp, groupComp) {
     const groupPart = groupComp
       ? ` (naive ${groupComp.naive || 0}, evasive ${groupComp.evasive || 0}, ` +
@@ -37,6 +46,7 @@
     btn.disabled = true;
     resultsEl.hidden = true;
     document.querySelector("#results-table tbody").innerHTML = "";
+    document.querySelector("#environment-table tbody").innerHTML = "";
     progressEl.textContent = "Running 20 tests and retraining... this can take a little while.";
 
     let data;
@@ -54,6 +64,9 @@
     }
 
     data.results.forEach((r) => addResultRow(r.archetype, r.label, r.score));
+    (data.environment_results || []).forEach((r) =>
+      addEnvironmentRow(r.scenario, r.is_automated, r.reasons)
+    );
 
     const retrainData = data.retrain;
     if (retrainData) {
