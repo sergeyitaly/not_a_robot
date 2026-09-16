@@ -11,6 +11,23 @@ def test_record_session_requires_a_trusted_label(tmp_path):
         store.record_session(InteractionSession(label=None))
 
 
+def test_label_and_group_composition_reflect_recorded_sessions(tmp_path):
+    store = AutoRetrainStore(tmp_path / "proj")
+    sessions = make_synthetic_dataset(n_per_class=60, seed=42)
+    for session in sessions:
+        store.record_session(session)
+
+    label_comp = store.label_composition()
+    assert label_comp["human"] == sum(1 for s in sessions if s.label is True)
+    assert label_comp["bot"] == sum(1 for s in sessions if s.label is False)
+    assert label_comp["human"] + label_comp["bot"] == len(sessions)
+
+    group_comp = store.group_composition()
+    assert sum(group_comp.values()) == len(sessions)
+    assert group_comp["human"] == label_comp["human"]
+    assert set(group_comp) == {"human", "naive", "evasive", "headless", "sophisticated"}
+
+
 def test_record_session_appends_and_pending_count_tracks_it(tmp_path):
     store = AutoRetrainStore(tmp_path / "proj", min_new_sessions=5)
     assert store.pending_session_count() == 0

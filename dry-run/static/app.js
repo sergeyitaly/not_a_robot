@@ -14,38 +14,20 @@
     return res.json();
   }
 
-  function shuffled(arr) {
-    const a = arr.slice();
-    for (let i = a.length - 1; i > 0; i--) {
-      const j = Math.floor(Math.random() * (i + 1));
-      [a[i], a[j]] = [a[j], a[i]];
-    }
-    return a;
-  }
-
-  // 10 human / 10 bot (bots spread unevenly across archetypes, evenly
-  // enough for a demo) -- kept at a real 50/50 split on purpose. An
-  // earlier version of this batch was 4 human / 16 bot (20/80), which
-  // silently dragged the store's cumulative class balance away from the
-  // synthetic generator's 50/50 design with every click, deflating the
-  // post-retrain human pass rate the longer you clicked. Every batch
-  // recorded here, at every count, stays 50/50 so the cumulative ratio
-  // can't drift regardless of how many times this runs.
-  const BATCH = [
-    ...Array(10).fill("human"),
-    ...Array(3).fill("naive"),
-    ...Array(3).fill("evasive"),
-    ...Array(2).fill("headless"),
-    ...Array(2).fill("sophisticated"),
-  ];
-
-  function addResultRow(archetype, score) {
+  function addResultRow(archetype, label, score) {
     const tbody = document.querySelector("#results-table tbody");
     const row = document.createElement("tr");
-    const trueLabel = archetype === "human" ? "human" : "bot";
     row.innerHTML =
-      `<td>${archetype}</td><td>${trueLabel}</td><td>${(score * 100).toFixed(1)}%</td>`;
+      `<td>${archetype}</td><td>${label}</td><td>${(score * 100).toFixed(1)}%</td>`;
     tbody.appendChild(row);
+  }
+
+  function formatComposition(labelComp, groupComp) {
+    const groupPart = groupComp
+      ? ` (naive ${groupComp.naive || 0}, evasive ${groupComp.evasive || 0}, ` +
+        `headless ${groupComp.headless || 0}, sophisticated ${groupComp.sophisticated || 0})`
+      : "";
+    return `${labelComp.human} human / ${labelComp.bot} bot${groupPart}`;
   }
 
   document.getElementById("btn-run-tests").addEventListener("click", async () => {
@@ -55,27 +37,26 @@
     btn.disabled = true;
     resultsEl.hidden = true;
     document.querySelector("#results-table tbody").innerHTML = "";
+    progressEl.textContent = "Running 20 tests and retraining... this can take a little while.";
 
-    const batch = shuffled(BATCH);
-    for (let i = 0; i < batch.length; i++) {
-      const archetype = batch[i];
-      progressEl.textContent = `Running test ${i + 1} / ${batch.length}: ${archetype}...`;
-      try {
-        const res = await fetch(`/api/simulate/${archetype}?record=true`);
-        const data = await res.json();
-        if (!data.error) {
-          addResultRow(archetype, data.score);
-        }
-      } catch (e) {
-        progressEl.textContent = `Test ${i + 1} failed: ${e}`;
-      }
-      await new Promise((resolve) => setTimeout(resolve, 100));
+    let data;
+    try {
+      data = await postJSON("/api/run_tests", {});
+    } catch (e) {
+      progressEl.textContent = `Failed: ${e}`;
+      btn.disabled = false;
+      return;
+    }
+    if (data.error) {
+      progressEl.textContent = data.error;
+      btn.disabled = false;
+      return;
     }
 
-    progressEl.textContent = "Batch done. Retraining...";
-    const retrainData = await postJSON("/api/retrain", { force: true });
+    data.results.forEach((r) => addResultRow(r.archetype, r.label, r.score));
 
-    if (retrainData.retrained) {
+    const retrainData = data.retrain;
+    if (retrainData) {
       document.getElementById("m-sessions").textContent = retrainData.n_sessions;
       document.getElementById("m-accuracy").textContent = pct(retrainData.accuracy_range);
       document.getElementById("m-human").textContent = pct(retrainData.human_pass_rate_range);
@@ -85,6 +66,10 @@
     } else {
       progressEl.textContent = "Done scoring the batch. Not enough new sessions to retrain yet.";
     }
+
+    document.getElementById("m-composition").textContent =
+      `Composition: ${formatComposition(data.label_composition, data.group_composition)} ` +
+      "(design: 50/50 human/bot, bots 45/35/10/10 naive/evasive/headless/sophisticated)";
 
     resultsEl.hidden = false;
     btn.disabled = false;

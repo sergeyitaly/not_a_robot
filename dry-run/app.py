@@ -132,7 +132,13 @@ def simulate(archetype: str):
     it. With ?record=true, also records it -- using the *generator's own*
     true label (human archetype -> True, every bot archetype -> False),
     not a self-declared one, so this is real ground truth, unlike the
-    label radio buttons in the manual "Record & self-enrich" section."""
+    label radio buttons in the manual "Record & self-enrich" section.
+
+    Kept for direct API exploration (see dry-run/README.md); the Run
+    Tests button uses /api/run_tests instead, which draws its batch from
+    make_synthetic_dataset() rather than fixed per-archetype counts, so
+    it can't drift from the library's own archetype weights the way a
+    hand-picked count easily can (see that endpoint's docstring)."""
     generator = _ARCHETYPES.get(archetype)
     if generator is None:
         return jsonify({"error": f"unknown archetype {archetype!r}"}), 404
@@ -154,6 +160,55 @@ def simulate(archetype: str):
             "recorded": recorded,
             "pending": store.pending_session_count(),
             "session": session_to_dict(session),
+        }
+    )
+
+
+@app.route("/api/run_tests", methods=["POST"])
+def run_tests():
+    """One atomic call behind the Run Tests button: generate a batch via
+    make_synthetic_dataset() -- the same function the CLI's --synthetic
+    mode and the README's benchmark use, so the archetype mix always
+    matches the library's actual design weights (45/35/10/10) instead of
+    a hand-picked count that can silently drift from them (an earlier
+    version of this demo used a fixed 3:3:2:2 split that overweighted
+    headless/sophisticated 2x relative to design -- this endpoint can't
+    have that class of bug, because it delegates archetype selection
+    entirely to the library's own weighted draw).
+
+    Scores each session against the model as it stands *before* this
+    call (useful evidence of what the previous model does with fresh
+    data), records it, then forces a retrain and returns the retrain
+    result plus the store's full cumulative composition -- so a pass/
+    catch-rate change always comes with the numbers needed to tell
+    "composition drifted" from "the model genuinely learned something"
+    apart.
+    """
+    batch = make_synthetic_dataset(n_per_class=10, seed=random.randrange(2**31))
+
+    results = []
+    for session in batch:
+        try:
+            p_human = store.score(session)
+        except RuntimeError as exc:
+            return jsonify({"error": str(exc)}), 409
+        store.record_session(session)
+        results.append(
+            {
+                "archetype": session.group,
+                "label": "human" if session.label else "bot",
+                "score": p_human,
+            }
+        )
+
+    retrain_result = store.maybe_retrain(force=True)
+
+    return jsonify(
+        {
+            "results": results,
+            "retrain": retrain_result,
+            "label_composition": store.label_composition(),
+            "group_composition": store.group_composition(),
         }
     )
 

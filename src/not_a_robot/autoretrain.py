@@ -115,6 +115,31 @@ class AutoRetrainStore:
         """Total labeled sessions recorded so far (all-time, not just pending)."""
         return len(self._load_all_sessions())
 
+    def label_composition(self) -> dict[str, int]:
+        """{"human": n, "bot": n} across every session recorded so far.
+
+        A skewed composition here (drifted away from whatever balance
+        your labeling process intends) changes what the model learns as
+        surely as a skewed feature does -- check this before trusting a
+        pass/catch-rate change you can't otherwise explain.
+        """
+        sessions = self._load_all_sessions()
+        return {
+            "human": sum(1 for s in sessions if s.label is True),
+            "bot": sum(1 for s in sessions if s.label is False),
+        }
+
+    def group_composition(self) -> dict[str, int]:
+        """Count of sessions per ``InteractionSession.group`` across
+        everything recorded so far (falling back to "human"/"bot" for
+        sessions with no group set)."""
+        sessions = self._load_all_sessions()
+        counts: dict[str, int] = {}
+        for s in sessions:
+            g = s.group if s.group is not None else ("human" if s.label else "bot")
+            counts[g] = counts.get(g, 0) + 1
+        return counts
+
     def history(self) -> list[dict]:
         """Every past retrain's summary record, oldest first."""
         return self._load_state().get("history", [])
