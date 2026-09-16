@@ -1,0 +1,133 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>not_a_robot -- live demo</title>
+<link rel="stylesheet" href="/static/style.css" />
+</head>
+<body>
+<div class="wrap">
+
+  <header>
+    <h1>not_a_robot -- live demo</h1>
+    <p class="sub">
+      A local dry-run of the <code>not_a_robot</code> Python library.
+      Move your mouse, type, scroll, and click in the panel below, then
+      press <strong>Run Test</strong> to score your own session with the
+      currently deployed model.
+    </p>
+  </header>
+
+  <section class="panel" id="capture-panel">
+    <h2>1. Interaction capture area</h2>
+    <p class="hint">
+      Your mouse movements, keystrokes in the field below, scrolling in
+      this box, clicks, tab switches, and pastes are all being recorded
+      client-side. Nothing is sent anywhere until you click a button.
+    </p>
+
+    <div id="scroll-zone" class="scroll-zone">
+      <p>Scroll inside this box a little -- scroll behavior (distance,
+      direction reversals, timing) is one of the signals the detector
+      extracts.</p>
+      <p>The library extracts several feature groups: mouse dynamics
+      (path efficiency, velocity/acceleration/jerk), keystroke dynamics
+      (dwell/flight time), scroll behavior, click position variance, and
+      tab-focus / paste behavior.</p>
+      <p>A scripted bot's mouse path tends to be a near-straight line at
+      constant velocity; a real human's path is curvier and speed
+      varies. Scripted keystrokes tend to land at uniform, often
+      suspiciously short intervals; real typing rhythm varies and
+      includes hesitations.</p>
+      <p>Try switching to another browser tab and back -- that's a
+      focus/blur event, another signal the detector uses.</p>
+      <p>(filler so this box actually scrolls) &mdash; end of this
+      section, scroll back up.</p>
+    </div>
+
+    <label class="field-label" for="text-field">Type something here (keystroke dynamics):</label>
+    <input id="text-field" type="text" placeholder="Type a sentence, or paste one..." autocomplete="off" />
+
+    <div class="row">
+      <button id="btn-run-test" class="primary">Run Test</button>
+      <button id="btn-reset">Reset captured session</button>
+    </div>
+
+    <div id="score-display" class="score-display" data-state="empty">
+      <div class="score-bar"><div id="score-fill" class="score-fill"></div></div>
+      <div id="score-label" class="score-label">No test run yet</div>
+    </div>
+  </section>
+
+  <section class="panel" id="enrich-panel">
+    <h2>2. Record &amp; self-enrich</h2>
+    <p class="hint">
+      For this demo, <strong>you</strong> declare the label -- this is a
+      stand-in for a real trusted signal (a CAPTCHA outcome, verified
+      signup, manual review). It is not how a production deployment
+      should get its labels; see
+      <code>AutoRetrainStore</code>'s docstring in the library for why
+      that distinction matters.
+    </p>
+    <div class="row">
+      <label><input type="radio" name="label" value="true" checked /> I'm acting like a human</label>
+      <label><input type="radio" name="label" value="false" /> I'm simulating bot-like behavior (fast, robotic)</label>
+    </div>
+    <div class="row">
+      <button id="btn-record">Record this session</button>
+      <button id="btn-force-retrain">Force retrain now</button>
+    </div>
+    <div id="retrain-result" class="retrain-result"></div>
+  </section>
+
+  <section class="panel" id="simulate-panel">
+    <h2>3. Simulate bot/human archetypes</h2>
+    <p class="hint">
+      Instantly generate and score a synthetic session from each
+      archetype the bundled demo dataset uses (see the project README
+      for what each one does and doesn't fake).
+    </p>
+    <div class="row" id="simulate-buttons">
+      <button data-archetype="human">Human</button>
+      <button data-archetype="naive">Naive bot</button>
+      <button data-archetype="evasive">Evasive bot</button>
+      <button data-archetype="headless">Headless bot</button>
+      <button data-archetype="sophisticated">Sophisticated bot</button>
+    </div>
+  </section>
+
+  <section class="panel" id="status-panel">
+    <h2>4. Store status &amp; retrain history</h2>
+    <div id="status-summary" class="status-summary">loading...</div>
+    <table id="history-table" class="history-table">
+      <thead>
+        <tr><th>Time</th><th>Sessions</th><th>New</th><th>Accuracy</th><th>Human pass</th><th>Bot catch</th></tr>
+      </thead>
+      <tbody></tbody>
+    </table>
+  </section>
+
+  <section class="panel" id="log-panel">
+    <h2>5. Test log (this browser session)</h2>
+    <table id="log-table" class="history-table">
+      <thead>
+        <tr><th>Time</th><th>Source</th><th>Label</th><th>Score</th></tr>
+      </thead>
+      <tbody></tbody>
+    </table>
+  </section>
+
+  <footer>
+    <p>
+      Scope note: this demo scores sessions captured on this page only,
+      against a model you can inspect and retrain locally. It does not
+      interact with, and cannot be used to defeat, any third-party
+      site's verification system.
+    </p>
+  </footer>
+
+</div>
+<script src="/static/app.js"></script>
+</body>
+</html>

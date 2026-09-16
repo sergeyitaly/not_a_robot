@@ -21,3 +21,7 @@ CLAUDE.md
 .github/hooks/
 .github/instructions/
 .github/copilot-instructions.md
+
+# dry-run demo's local session log/model, created at runtime
+dry-run-data/
+dry-run/dry-run-data/

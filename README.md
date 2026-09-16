@@ -9,9 +9,18 @@ This is meant to run on infrastructure you control, as one signal alongside
 your own verification flow — not to defeat verification on someone else's
 site. See [Scope](#scope) below.
 
+Published on PyPI: `pip install not-a-robot`. Want to see it working
+before reading the API? [dry-run/](dry-run/) is a live local demo (Docker
+or plain Python) with a page that captures your real mouse/keyboard/
+scroll/click behavior, a **Run Test** button that scores it, buttons to
+instantly simulate each bot archetype, and a record-and-retrain flow that
+visibly updates the model's accuracy as you feed it more sessions.
+
 ## Install
 
 ```bash
+pip install not-a-robot
+# or, from a checkout:
 pip install -e ".[dev]"
 ```
 

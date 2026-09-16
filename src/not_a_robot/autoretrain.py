@@ -62,6 +62,8 @@ class AutoRetrainStore:
         root: Union[str, Path],
         min_new_sessions: int = 50,
         cv_seeds: Sequence[int] = (0, 1, 2),
+        cv_n_splits: int = 5,
+        cv_n_repeats: int = 10,
         feature_names: Optional[tuple[str, ...]] = None,
     ):
         self.root = Path(root)
@@ -71,6 +73,8 @@ class AutoRetrainStore:
         self.state_path = self.root / "state.json"
         self.min_new_sessions = min_new_sessions
         self.cv_seeds = tuple(cv_seeds)
+        self.cv_n_splits = cv_n_splits
+        self.cv_n_repeats = cv_n_repeats
         self.feature_names = feature_names
         self._detector_cache: Optional[BotDetector] = None
 
@@ -107,6 +111,14 @@ class AutoRetrainStore:
         state = self._load_state()
         return len(self._load_all_sessions()) - state.get("n_sessions_at_last_retrain", 0)
 
+    def total_session_count(self) -> int:
+        """Total labeled sessions recorded so far (all-time, not just pending)."""
+        return len(self._load_all_sessions())
+
+    def history(self) -> list[dict]:
+        """Every past retrain's summary record, oldest first."""
+        return self._load_state().get("history", [])
+
     def maybe_retrain(self, force: bool = False) -> Optional[dict]:
         """Retrain and redeploy if enough new sessions have accumulated.
 
@@ -138,6 +150,8 @@ class AutoRetrainStore:
                 s,
                 evaluate_cv(
                     sessions,
+                    n_splits=self.cv_n_splits,
+                    n_repeats=self.cv_n_repeats,
                     seed=s,
                     data_source=data_source,
                     feature_names=self.feature_names,
