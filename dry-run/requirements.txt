@@ -1,1 +1,2 @@
+not-a-robot>=0.1.1
 flask>=3.0,<4

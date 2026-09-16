@@ -208,6 +208,108 @@
     });
   });
 
+  // --- Flash-card challenge ---------------------------------------------
+  // Each card asks for one specific kind of interaction, so solving it
+  // and watching the score move makes clear which behavioral channel
+  // (mouse, keys, scroll, click, focus, paste) is driving the number.
+  const CARDS = [
+    {
+      prompt: 'Type this phrase into the field in section 1: "the quick brown fox"',
+      hint: "Exercises keystroke dwell/flight timing.",
+    },
+    {
+      prompt: "Move your mouse in a slow circle around this card, then click Solve.",
+      hint: "Exercises mouse path efficiency, velocity, and turning-angle features.",
+    },
+    {
+      prompt: "Scroll the box in section 1 down and back up a couple of times.",
+      hint: "Exercises scroll distance and direction-reversal features.",
+    },
+    {
+      prompt: "Click anywhere on the page three times.",
+      hint: "Exercises click count and click-position-variance features.",
+    },
+    {
+      prompt: "Switch to another browser tab for a second, then come back here.",
+      hint: "Exercises the focus/blur (tab-switch) feature.",
+    },
+    {
+      prompt: 'Copy this text, then paste it into the field in section 1: "not a robot"',
+      hint: "Exercises the paste-vs-typed ratio feature.",
+      copyText: "not a robot",
+    },
+    {
+      prompt: "Pause for a moment, then quickly type your name into the field in section 1.",
+      hint: "Exercises keystroke timing variability (hesitation).",
+    },
+    {
+      prompt: "Move your mouse to each corner of the screen, then back to the middle.",
+      hint: "Exercises mouse path coverage and velocity variance.",
+    },
+  ];
+  let currentCard = null;
+
+  function pickRandomCard() {
+    currentCard = CARDS[Math.floor(Math.random() * CARDS.length)];
+    document.getElementById("card-prompt").textContent = currentCard.prompt;
+
+    const hintEl = document.getElementById("card-hint");
+    hintEl.innerHTML = "";
+    const hintText = document.createElement("span");
+    hintText.textContent = currentCard.hint;
+    hintEl.appendChild(hintText);
+
+    if (currentCard.copyText) {
+      const copyBtn = document.createElement("button");
+      copyBtn.type = "button";
+      copyBtn.textContent = `Copy "${currentCard.copyText}"`;
+      copyBtn.addEventListener("click", () => {
+        if (navigator.clipboard) {
+          navigator.clipboard.writeText(currentCard.copyText).catch(() => {});
+        }
+      });
+      hintEl.appendChild(document.createElement("br"));
+      hintEl.appendChild(copyBtn);
+    }
+  }
+
+  function setCardScore(score, note) {
+    const fill = document.getElementById("card-score-fill");
+    const label = document.getElementById("card-score-label");
+    const display = document.getElementById("card-score-display");
+    if (score === null || score === undefined) {
+      fill.style.width = "0%";
+      label.textContent = note || "No card solved yet";
+      display.dataset.state = "empty";
+      return;
+    }
+    fill.style.width = Math.round(score * 100) + "%";
+    label.textContent = `${(score * 100).toFixed(1)}% human-like`;
+    display.dataset.state = score >= 0.5 ? "human" : "bot";
+  }
+
+  document.getElementById("btn-new-card").addEventListener("click", () => {
+    clearBuffers();
+    setCardScore(null, "New card -- go solve it");
+    pickRandomCard();
+  });
+
+  document.getElementById("btn-solve-card").addEventListener("click", async () => {
+    const payload = buildSessionPayload(null);
+    clearBuffers();
+    const data = await postJSON("/api/score", payload);
+    if (data.error) {
+      setCardScore(null, data.error);
+      return;
+    }
+    setCardScore(data.score);
+    const label = currentCard ? currentCard.prompt.slice(0, 28) + "..." : "flashcard";
+    addLogRow(`flashcard: ${label}`, "-", data.score);
+    pickRandomCard();
+  });
+
+  pickRandomCard();
+
   refreshStatus();
   setInterval(refreshStatus, 5000);
 })();

@@ -79,6 +79,31 @@ code {
   margin-bottom: 6px;
 }
 
+.card-box {
+  border: 1px dashed var(--accent);
+  border-radius: 8px;
+  padding: 16px;
+  background: #0b0f19;
+  margin: 12px 0;
+}
+
+.card-prompt {
+  font-size: 1.05rem;
+  font-weight: 600;
+}
+
+.card-hint {
+  margin-top: 8px;
+  font-size: 0.85rem;
+  color: var(--muted);
+}
+
+.card-hint button {
+  margin-top: 6px;
+  padding: 5px 10px;
+  font-size: 0.8rem;
+}
+
 input[type="text"] {
   width: 100%;
   padding: 10px 12px;

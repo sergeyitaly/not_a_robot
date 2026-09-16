@@ -20,10 +20,16 @@ Then open <http://localhost:8000>.
 **Without Docker (from the repository root):**
 
 ```bash
-pip install -e .
 pip install -r dry-run/requirements.txt
 NOT_A_ROBOT_STORE=./dry-run-data PYTHONPATH=. python dry-run/app.py
 ```
+
+`dry-run/requirements.txt` installs `not-a-robot` from PyPI (pinned to
+the version this demo was built against) plus Flask -- the same as
+`pip install not-a-robot` for anyone else. `PYTHONPATH=.` is still
+needed so `examples/synthetic_data.py` is importable: it's demo-only
+(baseline seeding + the "simulate" buttons), not part of the published
+package, so it's only available from this checkout.
 
 ## What you're looking at
 

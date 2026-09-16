@@ -60,8 +60,32 @@
     </div>
   </section>
 
+  <section class="panel" id="flashcard-panel">
+    <h2>2. Flash-card challenge</h2>
+    <p class="hint">
+      Each card asks for a specific kind of interaction -- typing,
+      mouse movement, scrolling, clicking, a tab switch, a paste -- so
+      you can see which behavioral channel is driving your score.
+      <strong>Solve</strong> scores whatever you've done since the last
+      card (using the same capture buffers as section 1) and immediately
+      deals the next one.
+    </p>
+    <div id="card-box" class="card-box">
+      <div id="card-prompt" class="card-prompt">Click "New card" to start.</div>
+      <div id="card-hint" class="card-hint"></div>
+    </div>
+    <div class="row">
+      <button id="btn-new-card">New card</button>
+      <button id="btn-solve-card" class="primary">Solve</button>
+    </div>
+    <div id="card-score-display" class="score-display" data-state="empty">
+      <div class="score-bar"><div id="card-score-fill" class="score-fill"></div></div>
+      <div id="card-score-label" class="score-label">No card solved yet</div>
+    </div>
+  </section>
+
   <section class="panel" id="enrich-panel">
-    <h2>2. Record &amp; self-enrich</h2>
+    <h2>3. Record &amp; self-enrich</h2>
     <p class="hint">
       For this demo, <strong>you</strong> declare the label -- this is a
       stand-in for a real trusted signal (a CAPTCHA outcome, verified
@@ -82,7 +106,7 @@
   </section>
 
   <section class="panel" id="simulate-panel">
-    <h2>3. Simulate bot/human archetypes</h2>
+    <h2>4. Simulate bot/human archetypes</h2>
     <p class="hint">
       Instantly generate and score a synthetic session from each
       archetype the bundled demo dataset uses (see the project README
@@ -98,7 +122,7 @@
   </section>
 
   <section class="panel" id="status-panel">
-    <h2>4. Store status &amp; retrain history</h2>
+    <h2>5. Store status &amp; retrain history</h2>
     <div id="status-summary" class="status-summary">loading...</div>
     <table id="history-table" class="history-table">
       <thead>
@@ -109,7 +133,7 @@
   </section>
 
   <section class="panel" id="log-panel">
-    <h2>5. Test log (this browser session)</h2>
+    <h2>6. Test log (this browser session)</h2>
     <table id="log-table" class="history-table">
       <thead>
         <tr><th>Time</th><th>Source</th><th>Label</th><th>Score</th></tr>
