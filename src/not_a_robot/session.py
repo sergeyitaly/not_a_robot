@@ -1,10 +1,11 @@
 from __future__ import annotations
 
+from .features.enrichment import ENRICHMENT_FEATURE_NAMES, extract_enrichment_features
 from .features.mouse import extract_mouse_features
 from .features.timing import extract_timing_features
 from .schema import InteractionSession
 
-FEATURE_NAMES: tuple[str, ...] = (
+_BASE_FEATURE_NAMES: tuple[str, ...] = (
     "mouse_num_points",
     "mouse_path_length",
     "mouse_path_efficiency",
@@ -28,9 +29,16 @@ FEATURE_NAMES: tuple[str, ...] = (
     "time_to_submit_ms",
 )
 
+FEATURE_NAMES: tuple[str, ...] = _BASE_FEATURE_NAMES + ENRICHMENT_FEATURE_NAMES
+
 
 def extract_features(session: InteractionSession) -> dict[str, float]:
-    """Extract the full named feature set for one session."""
+    """Extract the full named feature set for one session.
+
+    Combines the raw mouse/timing measurements with derived enrichment
+    ratios (coefficients of variation, per-second rates) computed from
+    them, so callers always get the complete, model-ready feature set.
+    """
     features: dict[str, float] = {}
     features.update(extract_mouse_features(session.mouse_events))
     features.update(
@@ -38,6 +46,7 @@ def extract_features(session: InteractionSession) -> dict[str, float]:
             session.key_events, session.page_load_t, session.submit_t
         )
     )
+    features.update(extract_enrichment_features(features))
     return features
 
 

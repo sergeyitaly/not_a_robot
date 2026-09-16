@@ -58,10 +58,80 @@ python -m examples.quickstart
 - **Timing / keystroke dynamics** (`not_a_robot.features.timing`): dwell
   time (key down -> up), flight time (key up -> next key down), time to
   first interaction, time to submit.
+- **Enrichment ratios** (`not_a_robot.features.enrichment`): coefficients
+  of variation and per-second rates derived from the two feature groups
+  above (e.g. `mouse_velocity_cv`, `key_rate_per_sec`), which normalize
+  for session length/typing speed and tend to separate scripted, uniform
+  behavior from naturally variable human behavior better than any single
+  raw statistic.
 
 All features are combined into one fixed-order vector
 (`not_a_robot.session.FEATURE_NAMES`) that feeds a scikit-learn classifier
 (`RandomForestClassifier` by default — pass your own via `BotDetector(model=...)`).
+
+## Training pipeline and success-rate validation
+
+`not_a_robot.pipeline.run_training_pipeline()` is the full training and
+enrichment pipeline: it extracts the enriched feature set, splits off a
+stratified held-out test set, runs stratified k-fold cross-validation on
+the remaining training data, fits the final `BotDetector`, and evaluates it
+once on the untouched test set. It returns the fitted detector plus a
+`TrainingReport` framed around the numbers that actually matter for a
+"not a robot" check:
+
+- **Human pass rate** — how often a real user is correctly verified as
+  human (test recall on the human class).
+- **Bot catch rate** — how often a bot session is correctly blocked.
+- **False accept rate** — bots that slipped through as human (the security
+  cost).
+- **False reject rate** — real users wrongly blocked (the UX cost).
+- Overall accuracy, precision, F1, ROC-AUC, the full confusion matrix, and
+  the top features by importance.
+
+```python
+from not_a_robot import run_training_pipeline
+
+detector, report = run_training_pipeline(sessions, data_source="prod-2026-09")
+print(report.summary())
+detector.save("bot_detector.joblib")
+```
+
+Or from the command line, against a real captured session log:
+
+```bash
+python -m not_a_robot.train --data sessions.jsonl --model-out bot_detector.joblib --report-out report.json
+```
+
+`--synthetic` runs the same pipeline against the bundled demo dataset (see
+below) so you can see a real, computed report before you have real traffic:
+
+```bash
+python -m not_a_robot.train --synthetic --n-per-class 150
+```
+
+That produced, on one run against the synthetic demo data (150 sessions per
+class, 75/25 train/test split, 5-fold CV):
+
+```
+Cross-validated accuracy: 100.0% +/- 0.0%
+
+Held-out test results:
+  Overall accuracy:   100.0%
+  Human pass rate:    100.0%  (real users correctly verified as human)
+  Bot catch rate:     100.0%  (bots correctly blocked)
+  False accept rate:  0.0%    (bots that slipped through as human)
+  False reject rate:  0.0%    (real users wrongly blocked)
+  ROC-AUC:            1.000
+```
+
+That 100% is expected and not meaningful on its own: the synthetic
+generator's "bot" archetype (a near-straight, constant-speed path) and
+"human" archetype (a jittery random walk with variable timing) are
+trivially separable by design, so this only proves the pipeline's
+mechanics (splitting, CV, fitting, metrics, reporting) work end to end.
+The report format is real; the input data for this particular run is not.
+Run `python -m not_a_robot.train --data <your sessions.jsonl>` on real,
+labeled traffic from your own site to get numbers you can actually trust.
 
 ## Capturing real training data
 
@@ -70,8 +140,11 @@ client-side capture. On the page you're protecting, record `mousemove`
 coordinates + timestamps and `keydown`/`keyup` timestamps into
 `MouseEvent`/`KeyEvent` objects, tag each finished session with a label
 (from a secondary signal you trust — e.g. a CAPTCHA outcome, an email
-verification, or manual review), and pass the collected `InteractionSession`
-objects to `BotDetector.fit()`.
+verification, or manual review), and either pass the collected
+`InteractionSession` objects straight to `run_training_pipeline()`, or
+persist them with `not_a_robot.io.save_sessions_jsonl()` (one JSON object
+per line) so `python -m not_a_robot.train --data sessions.jsonl` can pick
+them up later.
 
 `examples/synthetic_data.py` generates crude synthetic sessions (a jittery
 random walk vs. a near-straight constant-speed path) purely so the rest of
