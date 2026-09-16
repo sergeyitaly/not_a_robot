@@ -109,28 +109,37 @@ below) so you can see a real, computed report before you have real traffic:
 python -m not_a_robot.train --synthetic --n-per-class 150
 ```
 
-That produced, on one run against the synthetic demo data (150 sessions per
-class, 75/25 train/test split, 5-fold CV):
+That produced, on `python -m not_a_robot.train --synthetic --n-per-class 200 --seed 0`
+(200 sessions per class, 75/25 train/test split, 5-fold CV):
 
 ```
-Cross-validated accuracy: 100.0% +/- 0.0%
+Cross-validated accuracy: 97.0% +/- 2.2%
 
 Held-out test results:
-  Overall accuracy:   100.0%
+  Overall accuracy:   95.0%
   Human pass rate:    100.0%  (real users correctly verified as human)
-  Bot catch rate:     100.0%  (bots correctly blocked)
-  False accept rate:  0.0%    (bots that slipped through as human)
-  False reject rate:  0.0%    (real users wrongly blocked)
-  ROC-AUC:            1.000
+  Bot catch rate:     90.0%  (bots correctly blocked)
+  False accept rate:  10.0%  (bots that slipped through as human)
+  False reject rate:  0.0%   (real users wrongly blocked)
+  ROC-AUC:            0.940
 ```
 
-That 100% is expected and not meaningful on its own: the synthetic
-generator's "bot" archetype (a near-straight, constant-speed path) and
-"human" archetype (a jittery random walk with variable timing) are
-trivially separable by design, so this only proves the pipeline's
-mechanics (splitting, CV, fitting, metrics, reporting) work end to end.
-The report format is real; the input data for this particular run is not.
-Run `python -m not_a_robot.train --data <your sessions.jsonl>` on real,
+Consistent across other seeds (1-3): 93-97% overall accuracy, 86-94% bot
+catch rate, human pass rate 100% every time.
+
+The synthetic generator (`examples/synthetic_data.py`) draws bots from
+four weighted archetypes: naive (straight-line path, uniform keystrokes,
+45%), evasive (jittered but still tighter than human, 35%), headless
+(near-instant submit, little/no activity, 10%), and sophisticated (drawn
+from the *same* distribution as the human archetype, 10%) -- that last
+one is deliberately undetectable by a behavioral-only classifier, so the
+~10% false accept rate above isn't pipeline error, it's the generator's
+own designed detection ceiling showing up correctly in the report. That's
+what this run actually demonstrates: the pipeline's splitting, CV,
+fitting, metrics, and reporting all work end to end, and correctly
+recover a known-in-advance error floor. The report format and numbers
+are real; the input data for this particular run is not. Run
+`python -m not_a_robot.train --data <your sessions.jsonl>` on real,
 labeled traffic from your own site to get numbers you can actually trust.
 
 ## Capturing real training data
