@@ -55,9 +55,26 @@ code {
   font-size: 1.05rem;
 }
 
+.panel.highlight {
+  border: 1px solid var(--accent);
+  box-shadow: 0 0 0 1px rgba(79, 140, 255, 0.15);
+}
+
 .hint {
   color: var(--muted);
   font-size: 0.9rem;
+}
+
+button.big {
+  font-size: 1.05rem;
+  padding: 12px 28px;
+}
+
+.autopilot-progress {
+  margin-top: 12px;
+  font-size: 0.9rem;
+  color: var(--muted);
+  min-height: 1.2em;
 }
 
 .scroll-zone {

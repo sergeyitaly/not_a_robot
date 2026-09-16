@@ -13,14 +13,32 @@
     <h1>not_a_robot -- live demo</h1>
     <p class="sub">
       A local dry-run of the <code>not_a_robot</code> Python library.
-      Move your mouse, type, scroll, and click in the panel below, then
-      press <strong>Run Test</strong> to score your own session with the
-      currently deployed model.
+      Click <strong>Run Tests</strong> below for a fully automatic
+      walkthrough, or scroll down to interact with the model yourself.
     </p>
   </header>
 
+  <section class="panel highlight" id="autopilot-panel">
+    <h2>Run Tests</h2>
+    <p class="hint">
+      One click: generates 20 synthetic sessions across every archetype
+      the library ships (naive/evasive/headless/sophisticated bots, and
+      humans), each with its <strong>true, known label</strong> from the
+      generator itself -- not self-declared, unlike section 3 below.
+      Scores each against the current model, records it, and retrains
+      once enough have accumulated. Watch the score and the status panel
+      update live as it runs.
+    </p>
+    <button id="btn-run-tests" class="primary big">Run Tests</button>
+    <div id="autopilot-progress" class="autopilot-progress">Not started.</div>
+    <div id="autopilot-score-display" class="score-display" data-state="empty">
+      <div class="score-bar"><div id="autopilot-score-fill" class="score-fill"></div></div>
+      <div id="autopilot-score-label" class="score-label">No test run yet</div>
+    </div>
+  </section>
+
   <section class="panel" id="capture-panel">
-    <h2>1. Interaction capture area</h2>
+    <h2>1. Interaction capture area (manual, optional)</h2>
     <p class="hint">
       Your mouse movements, keystrokes in the field below, scrolling in
       this box, clicks, tab switches, and pastes are all being recorded

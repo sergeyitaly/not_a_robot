@@ -128,6 +128,11 @@ def retrain():
 
 @app.route("/api/simulate/<archetype>")
 def simulate(archetype: str):
+    """Generate one synthetic session from the given archetype and score
+    it. With ?record=true, also records it -- using the *generator's own*
+    true label (human archetype -> True, every bot archetype -> False),
+    not a self-declared one, so this is real ground truth, unlike the
+    label radio buttons in the manual "Record & self-enrich" section."""
     generator = _ARCHETYPES.get(archetype)
     if generator is None:
         return jsonify({"error": f"unknown archetype {archetype!r}"}), 404
@@ -136,8 +141,20 @@ def simulate(archetype: str):
         p_human = store.score(session)
     except RuntimeError as exc:
         return jsonify({"error": str(exc)}), 409
+
+    recorded = False
+    if request.args.get("record") == "true":
+        store.record_session(session)
+        recorded = True
+
     return jsonify(
-        {"score": p_human, "archetype": archetype, "session": session_to_dict(session)}
+        {
+            "score": p_human,
+            "archetype": archetype,
+            "recorded": recorded,
+            "pending": store.pending_session_count(),
+            "session": session_to_dict(session),
+        }
     )
 
 

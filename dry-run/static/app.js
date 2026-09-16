@@ -310,6 +310,80 @@
 
   pickRandomCard();
 
+  // --- Run Tests (fully automatic) ---------------------------------------
+  // One click: generates a batch of synthetic sessions across every
+  // archetype (each with its real, known label from the generator, not
+  // a self-declared one), scores + records each, then retrains once the
+  // batch is in. No manual interaction required.
+  function shuffled(arr) {
+    const a = arr.slice();
+    for (let i = a.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [a[i], a[j]] = [a[j], a[i]];
+    }
+    return a;
+  }
+
+  function setAutopilotScore(score, note) {
+    const fill = document.getElementById("autopilot-score-fill");
+    const label = document.getElementById("autopilot-score-label");
+    const display = document.getElementById("autopilot-score-display");
+    if (score === null || score === undefined) {
+      fill.style.width = "0%";
+      label.textContent = note || "No test run yet";
+      display.dataset.state = "empty";
+      return;
+    }
+    fill.style.width = Math.round(score * 100) + "%";
+    label.textContent = `${note ? note + ": " : ""}${(score * 100).toFixed(1)}% human-like`;
+    display.dataset.state = score >= 0.5 ? "human" : "bot";
+  }
+
+  const RUN_TESTS_BATCH = shuffled([
+    ...Array(4).fill("human"),
+    ...Array(4).fill("naive"),
+    ...Array(4).fill("evasive"),
+    ...Array(4).fill("headless"),
+    ...Array(4).fill("sophisticated"),
+  ]);
+
+  document.getElementById("btn-run-tests").addEventListener("click", async () => {
+    const btn = document.getElementById("btn-run-tests");
+    const progressEl = document.getElementById("autopilot-progress");
+    btn.disabled = true;
+
+    const batch = shuffled(RUN_TESTS_BATCH);
+    for (let i = 0; i < batch.length; i++) {
+      const archetype = batch[i];
+      progressEl.textContent = `Running test ${i + 1} / ${batch.length}: ${archetype}...`;
+      try {
+        const res = await fetch(`/api/simulate/${archetype}?record=true`);
+        const data = await res.json();
+        if (!data.error) {
+          setAutopilotScore(data.score, archetype);
+          addLogRow(`auto-test: ${archetype}`, archetype === "human" ? "human" : "bot", data.score);
+        }
+      } catch (e) {
+        progressEl.textContent = `Test ${i + 1} failed: ${e}`;
+      }
+      await new Promise((resolve) => setTimeout(resolve, 150));
+    }
+
+    progressEl.textContent = "Batch done. Retraining...";
+    const retrainData = await postJSON("/api/retrain", { force: true });
+    if (retrainData.retrained) {
+      progressEl.textContent =
+        `Done. Retrained on ${retrainData.n_sessions} sessions (${retrainData.n_new_sessions} new). ` +
+        `Accuracy ${pct(retrainData.accuracy_range)}, human pass ${pct(retrainData.human_pass_rate_range)}, ` +
+        `bot catch ${pct(retrainData.bot_catch_rate_range)}.`;
+    } else {
+      progressEl.textContent = "Done scoring the batch. Not enough new sessions to retrain yet.";
+    }
+
+    await refreshStatus();
+    btn.disabled = false;
+  });
+
   refreshStatus();
   setInterval(refreshStatus, 5000);
 })();
