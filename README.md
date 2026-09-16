@@ -17,7 +17,7 @@ generates a synthetic batch across every archetype the library ships,
 scores and trains on it, and reports the actual accuracy / human-pass /
 bot-catch numbers the run just produced, not a mock.
 
-**Status:** 0.1.2, alpha. Validated only on synthetic data so far; the
+**Status:** 0.1.3, alpha. Validated only on synthetic data so far; the
 pipeline ships here, real-traffic numbers are yours. See
 [Training pipeline and success-rate validation](#training-pipeline-and-success-rate-validation).
 
