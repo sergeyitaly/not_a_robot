@@ -5,24 +5,30 @@ robot" check: it extracts behavioral-telemetry features (mouse-movement
 dynamics, keystroke timing, overall pacing) from an interaction session and
 trains an ML classifier that scores how human-like the session looks.
 
-This is meant to run on infrastructure you control, as one signal alongside
-your own verification flow — not to defeat verification on someone else's
-site. See [Scope](#scope) below.
+**Scope:** builds the detector side of a "prove you're not a robot" check,
+for infrastructure you run yourself. Does not include CAPTCHA-solving,
+browser automation for third-party challenges, or trajectory generation
+meant to fool someone else's detection. Full statement under
+[Scope](#scope).
 
-Published on PyPI: `pip install not-a-robot`. Want to see it working
-before reading the API? [dry-run/](dry-run/) is a live local demo (Docker
-or plain Python) with a page that captures your real mouse/keyboard/
-scroll/click behavior, a **Run Test** button that scores it, buttons to
-instantly simulate each bot archetype, and a record-and-retrain flow that
-visibly updates the model's accuracy as you feed it more sessions.
+**Status:** 0.1.1, alpha. Validated only on synthetic data so far; the
+pipeline ships here, real-traffic numbers are yours. See
+[Training pipeline and success-rate validation](#training-pipeline-and-success-rate-validation).
+
+Want to see it working before reading the API? [dry-run/](dry-run/) is a
+live local demo (Docker or plain Python) with a page that captures your
+real mouse/keyboard/scroll/click behavior, a **Run Test** button that
+scores it, buttons to instantly simulate each bot archetype, and a
+record-and-retrain flow that visibly updates the model's accuracy as you
+feed it more sessions.
 
 ## Install
 
 ```bash
 pip install not-a-robot
-# or, from a checkout:
-pip install -e ".[dev]"
 ```
+
+(For an editable install from a checkout, see [Development](#development).)
 
 ## Quickstart
 
@@ -188,10 +194,12 @@ the predicted-vs-observed relationship breaking down badly in a sparse
 mid-range (a handful of test sessions per 0.1-wide probability bin, not
 tracking the observed human fraction there) while a real, if partial,
 overlap between `sophisticated` bots and humans sits in exactly that
-region. Calibrating **did** meaningfully improve default-threshold
-`sophisticated` recall (23.7% pooled before calibration -> 34.3% after)
-and nudged overall bot catch rate up a couple points. It did **not**,
-however, change the cost-curve behavior at `c_fa=10:c_fr=1`: the
+region. Calibrating moved where the default 0.5 threshold sits on the
+ROC curve, which raised default-threshold `sophisticated` recall from
+23.7% (pooled, pre-calibration) to 34.3% (post) and nudged overall bot
+catch rate up a couple points. **It did not change the ROC curve itself,
+and it did not change the cost-optimal operating point** — the cost-curve
+behavior at `c_fa=10:c_fr=1` was unaffected: the
 cost-optimal threshold is still 0.85-0.89 across seeds, with FAR pushed
 to ~0% at the cost of a 13-16% false reject rate on real humans, both
 before and after calibration. That similarity is itself informative: it
@@ -206,6 +214,9 @@ which is why `cost_fa`/`cost_fr` are parameters, not constants** — the
 `--cost-fa`/`--cost-fr` with your actual deployment's asymmetry (a login
 form and a comment form do not have the same one), and don't ship the
 cost-optimal threshold without deciding you actually want that trade.
+Rules of thumb to start from, not to ship blindly: a login or payment
+form, start around `--cost-fa 100 --cost-fr 1`; a comment or search form,
+`--cost-fa 10 --cost-fr 1` is closer.
 
 **`--drop-keys` ablation** (excludes keystroke-timing features, simulating
 a mouse-only capture surface): removing them barely moved anything — bot
@@ -267,7 +278,15 @@ store = AutoRetrainStore("path/to/project/.not_a_robot", min_new_sessions=50)
 # From your live scoring path (cheap -- just a file append):
 store.record_session(session)  # raises if session.label is None
 p_human = store.score(new_session)
+```
 
+The store trusts your labels. A honeypot that fires on humans teaches
+the detector that humans are bots; the model backup
+(`model.joblib.<timestamp>.bak`) is the only rollback. Label quality is
+upstream of this library -- the `label is not None` guard stops an
+*unlabeled* session from being trained on, not a *wrongly* labeled one.
+
+```python
 # From a separate periodic job (cron, a scheduled task) -- NOT the
 # request path: fitting + multi-seed CV takes tens of seconds, not ms.
 record = store.maybe_retrain()  # None if under min_new_sessions since last retrain
@@ -321,6 +340,14 @@ verification, or manual review), and either pass the collected
 persist them with `not_a_robot.io.save_sessions_jsonl()` (one JSON object
 per line) so `python -m not_a_robot.train --data sessions.jsonl` can pick
 them up later.
+
+Tag `group` when you have a population label you want recall broken out
+by: `"human"`, `"known_bot_honeypot"` / `"known_bot_asn"` /
+`"known_bot_review"` (one per label provenance), `"unknown"` for sessions
+you score but haven't labeled. `evaluate_cv()` pools recall per group
+with a Wilson CI. Without a group tag, you get the aggregate bot catch
+rate and none of the per-group breakdown — which is the part that tells
+you which bots are slipping through.
 
 `examples/synthetic_data.py` generates crude synthetic sessions (one
 human archetype and four weighted bot archetypes, see above) purely so
