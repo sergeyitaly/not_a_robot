@@ -6,6 +6,7 @@ from typing import Iterable, Optional, Union
 import joblib
 import numpy as np
 from sklearn.base import ClassifierMixin
+from sklearn.calibration import CalibratedClassifierCV
 from sklearn.ensemble import RandomForestClassifier
 
 from .schema import InteractionSession
@@ -22,11 +23,26 @@ class BotDetector:
     This is a behavioral-risk signal meant to sit alongside an actual
     challenge or auth flow, not to replace one -- treat its output as one
     input to a decision, not a verdict.
+
+    The default model wraps a ``RandomForestClassifier`` in
+    ``CalibratedClassifierCV``. A raw random forest's ``predict_proba`` is
+    a vote fraction, not a real probability -- checked against a
+    reliability diagram, most of its mass sits at the extremes with a
+    sparse, badly-calibrated middle (a handful of samples per 0.1-wide
+    bin, mean predicted probability not tracking the observed human
+    fraction there). That's fine for the classifier's own 0.5 decision,
+    but it makes any *other* threshold -- e.g. the cost-optimal one in
+    ``pipeline.cost_optimal_threshold`` -- unreliable, since the sweep is
+    hunting through that noisy, sparsely-populated region. Calibration
+    fixes that; pass your own uncalibrated model via ``model=`` if you
+    specifically want to skip it (e.g. to reproduce that failure mode).
     """
 
     def __init__(self, model: Optional[ClassifierMixin] = None):
-        self.model = model or RandomForestClassifier(
-            n_estimators=200, max_depth=8, random_state=0
+        self.model = model or CalibratedClassifierCV(
+            RandomForestClassifier(n_estimators=200, max_depth=8, random_state=0),
+            method="isotonic",
+            cv=3,
         )
         self._fitted = False
 

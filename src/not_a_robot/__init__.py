@@ -1,6 +1,15 @@
+from .autoretrain import AutoRetrainStore
 from .detector import BotDetector
 from .io import load_sessions_jsonl, save_sessions_jsonl
-from .pipeline import CVReport, TrainingReport, evaluate_cv, run_training_pipeline
+from .pipeline import (
+    CVReport,
+    MultiSeedReport,
+    TrainingReport,
+    cost_optimal_threshold,
+    evaluate_cv,
+    run_training_pipeline,
+    summarize_across_seeds,
+)
 from .schema import (
     ClickEvent,
     FocusEvent,
@@ -29,6 +38,10 @@ __all__ = [
     "TrainingReport",
     "evaluate_cv",
     "CVReport",
+    "cost_optimal_threshold",
+    "summarize_across_seeds",
+    "MultiSeedReport",
+    "AutoRetrainStore",
 ]
 
 __version__ = "0.1.0"

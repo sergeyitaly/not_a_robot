@@ -84,28 +84,34 @@ All features are combined into one fixed-order vector
 
 ## Training pipeline and success-rate validation
 
-There are two evaluation paths, and they answer different questions.
+There are three evaluation paths, answering three different questions.
 
-**`run_training_pipeline()`** fits the detector you'd actually deploy: it
-extracts the enriched feature set, splits off one stratified held-out test
-set, fits a `BotDetector` on the rest, and evaluates it once on that split.
-Useful for producing a model + a quick report, but its metrics are a
-**single point estimate** — on a dataset in the hundreds of sessions, one
-particular 75/25 split can look meaningfully better or worse than another
-just from sampling luck, not from anything about the model.
+**`run_training_pipeline()`** fits the detector you'd actually deploy: one
+stratified train/test split, fit on train, evaluated once on test. Useful
+for producing a model + a quick report, but its metrics are a **single
+point estimate** — on a dataset in the hundreds of sessions, one 75/25
+split can look meaningfully better or worse than another from sampling
+luck alone, before the model is even a variable.
 
-**`evaluate_cv()`** answers "how much should I trust that number": it runs
-repeated stratified k-fold cross-validation (`n_splits x n_repeats`
-independent folds, a fresh model per fold, default 5x10 = 50), and reports
-the **mean and standard deviation** of every metric across folds, plus
-**recall broken out by `InteractionSession.group`** — a sub-population tag
-(e.g. a known bot type in real data, or the synthetic archetype below) —
-so an aggregate "bot catch rate" can't hide that all the errors are
-concentrated in one group. This is the number to actually trust; the CLI
-runs it by default alongside the single-split report.
+**`evaluate_cv()`** runs repeated stratified k-fold CV (`n_splits x
+n_repeats` independent folds, default 5x10=50) on *one* sample of
+sessions, and reports mean +/- std per metric, **recall pooled by
+`InteractionSession.group`** with a Wilson 95% confidence interval (not a
+mean/std of per-fold rates — a rare group can have 0-2 members in a given
+fold, where std is close to meaningless; pooling raw hit/total counts
+across all folds is the number that's actually defensible), and the
+**cost-optimal decision threshold** for a stated false-accept-vs-reject
+cost ratio, with per-group recall at that threshold instead of just the
+classifier's default 0.5 cut.
+
+**`summarize_across_seeds()`** (CLI: `--seeds 0,1,2,3`) is the one to
+actually quote. Repeated CV within one seed only captures fold-partition
+variance — every fold in that run shares the same 400 sessions. Running
+`evaluate_cv` at several seeds and pooling exposes the variance that
+matters: how much the numbers move when the *sample itself* changes.
 
 ```python
-from not_a_robot import run_training_pipeline, evaluate_cv
+from not_a_robot import run_training_pipeline, evaluate_cv, summarize_across_seeds
 
 detector, report = run_training_pipeline(sessions, data_source="prod-2026-09")
 detector.save("bot_detector.joblib")
@@ -118,71 +124,181 @@ From the command line, against a real captured session log:
 
 ```bash
 python -m not_a_robot.train --data sessions.jsonl --model-out bot_detector.joblib --report-out report.json
+python -m not_a_robot.train --data sessions.jsonl --seeds 0,1,2,3   # the defensible report
 ```
 
 `--synthetic` runs the same pipeline against the bundled demo dataset (see
 below) so you can see a real, computed report before you have real traffic:
 
 ```bash
-python -m not_a_robot.train --synthetic --n-per-class 200
+python -m not_a_robot.train --synthetic --n-per-class 200 --seeds 0,1,2,3
 ```
 
-That produced, on seed 0 (400 sessions, 5-fold x 10-repeat CV, full
-feature set):
+That produced (**1,600 sessions total**: 400/seed x 4 seeds, 5-fold x
+10-repeat CV per seed, full feature set, `c_fa=10 : c_fr=1` for the
+cost-optimal threshold, `BotDetector`'s calibrated default model — see
+below):
 
 ```
-=== not_a_robot repeated-CV evaluation ===
-Sessions: 400 (5-fold x 10 repeats = 50 test folds)
+  seed    accuracy   human pass   bot catch     FAR     FRR
+  0         92.5%        92.9%       92.1%    7.9%    7.1%
+  1         96.0%        98.2%       93.7%    6.3%    1.8%
+  2         94.7%        95.8%       93.6%    6.4%    4.2%
+  3         94.4%        96.5%       92.3%    7.7%    3.5%
 
-Accuracy:           92.8% +/- 2.2%
-Human pass rate:    96.2% +/- 3.6%
-Bot catch rate:     89.4% +/- 4.6%
-False accept rate:  10.7% +/- 4.6%
-False reject rate:  3.9% +/- 3.6%
-ROC-AUC:            0.990 +/- 0.006
+Bot catch rate range across seeds: 92.1% - 93.7%  <- the honest operating characteristic
 
-Per-group recall (mean +/- std across the folds each session
-appeared in as a test example):
-  group             weight   recall
-  human             50.0%   96.2% +/- 14.2%
-  naive             19.8%   100.0% +/- 0.0%
-  evasive           18.5%   100.0% +/- 0.0%
-  sophisticated      6.2%   14.8% +/- 23.7%
-  headless           5.5%   100.0% +/- 0.0%
+Combined per-group recall (pooled across all seeds, Wilson 95% CI):
+  group          weight       n   recall [95% CI]
+  human          50.0%    8000   95.9% [95.4%-96.3%]
+  naive          21.9%    3500   100.0% [99.9%-100.0%]
+  evasive        17.2%    2760   100.0% [99.9%-100.0%]
+  headless        5.5%     880   100.0% [99.6%-100.0%]
+  sophisticated   5.4%     860   34.3% [31.2%-37.5%]
 ```
 
-Seeds 1 and 2 tell the same story: naive/evasive/headless bots caught at
-100.0% every time, `sophisticated` caught at 0.7% (seed 1) to 52.1% (seed
-2) with very high per-fold variance (that variance is itself the honest
-finding — a rare, weak signal isn't something to build a security decision
-on). Aggregate accuracy across the three seeds: 92.8-96.3%. **This is the
-correct way to read this benchmark: not "95% accurate," but "consistently
-catches unsophisticated and evasive bots, and catches a real but unreliable
-fraction of bots that mimic mouse/keyboard behavior closely."** A
-single-split `TrainingReport` on the same data can show bot catch rate
-anywhere from 78% to 100% depending on which sessions happened to land in
-the test split — that swing is sampling noise on a ~400-session synthetic
-set, not the model changing.
+**Read it as:** bot catch rate is stable at 92-94% across resamples, not a
+single point estimate. `naive`/`evasive`/`headless` are caught at ~100%
+with a tight interval (n in the thousands, pooled). `sophisticated` is
+caught at 34.3% [31.2-37.5%] pooled — but **per-seed it ranges 10.7% to
+54.3%**, a ~40-point spread the pooled interval doesn't show on its own.
+That per-seed spread, not the pooled point estimate, is the honest
+finding about this group: the only signal separating it from humans is
+the scroll/click/engagement channels, and it's weak enough that which
+seed the model happens to train on visibly changes how much of it gets
+caught. **Do not treat any single seed's `sophisticated` recall as an
+estimate of real-world performance against mimicry bots** — not the
+54.3% from seed 2, and not the pooled 34.3% either, without also carrying
+that per-seed range.
+
+**Calibration, and what it did and didn't fix.** `BotDetector`'s default
+model wraps its `RandomForestClassifier` in `CalibratedClassifierCV`
+(isotonic) — a raw random forest's `predict_proba` is a vote fraction,
+not a real probability, and a reliability check on the raw model showed
+the predicted-vs-observed relationship breaking down badly in a sparse
+mid-range (a handful of test sessions per 0.1-wide probability bin, not
+tracking the observed human fraction there) while a real, if partial,
+overlap between `sophisticated` bots and humans sits in exactly that
+region. Calibrating **did** meaningfully improve default-threshold
+`sophisticated` recall (23.7% pooled before calibration -> 34.3% after)
+and nudged overall bot catch rate up a couple points. It did **not**,
+however, change the cost-curve behavior at `c_fa=10:c_fr=1`: the
+cost-optimal threshold is still 0.85-0.89 across seeds, with FAR pushed
+to ~0% at the cost of a 13-16% false reject rate on real humans, both
+before and after calibration. That similarity is itself informative: it
+means that behavior was never primarily a calibration artifact — it's
+what a 10:1 cost ratio actually does when `sophisticated` bots and a
+minority of real humans (the ones who also don't scroll, blur, or paste
+in a given session) genuinely overlap in score. **Whether trading a
+~1-in-7 real-user rejection rate for catching most `sophisticated` bots
+is worth it depends entirely on your own false-accept-vs-reject cost,
+which is why `cost_fa`/`cost_fr` are parameters, not constants** — the
+10:1 default here is illustrative, not a recommendation; pass
+`--cost-fa`/`--cost-fr` with your actual deployment's asymmetry (a login
+form and a comment form do not have the same one), and don't ship the
+cost-optimal threshold without deciding you actually want that trade.
+
+**`--drop-keys` ablation** (excludes keystroke-timing features, simulating
+a mouse-only capture surface): removing them barely moved anything — bot
+catch rate range 91.6-94.2% (vs. 92.1-93.7% with keys), combined
+`sophisticated` recall 34.2% [31.1-37.4%] (vs. 34.3% with keys),
+statistically indistinguishable. This holds both before and after
+calibration, and contradicts what the single-split top-feature-importance
+list suggested earlier (keystroke features ranked highest) — that ranking
+reflected `naive`/`evasive` separability, not what actually separates
+`sophisticated`. The reason is in the generator: `sophisticated` reuses
+the human archetype's keystroke timing *and* mouse trajectory exactly, so
+neither channel ever carried separating signal against it — only the
+scroll/click/engagement features it doesn't fake do. Keystroke timing
+helps separate `naive`/`evasive` (which fake it badly), but mouse
+geometry alone already separates those too, so dropping keys is
+redundant there, not costly. **The lesson isn't "keystroke timing matters
+most" — it's "the channels a specific bot doesn't bother faking are what
+catch it," a property of the bot, not of any one feature group.** Run
+this against your own real data before assuming it transfers; a real
+mouse-only capture surface (e.g. a slider puzzle with no text field) will
+likely have worse `naive`/`evasive` separability than this synthetic set,
+since here they still fail on mouse geometry too.
 
 The synthetic generator (`examples/synthetic_data.py`) draws bots from
 four weighted archetypes: naive (straight-line path, uniform keystrokes,
 fixed click coordinate, 45%), evasive (jittered but still tighter than
 human, scripted scroll, 35%), headless (near-instant submit, little/no
 activity, 10%), and sophisticated (10%) — which reuses the human
-archetype's mouse/keyboard/click distributions (the signals that are
-well-documented and cheap for an attacker to fake — see `description.txt`
-on GAN-generated mouse trajectories) but never scrolls, blurs, or pastes,
-since those channels are more effort to convincingly automate. That's why
-`sophisticated` is hard but not literally 0% catchable: the scroll/click/
-engagement features give real, if noisy, signal against it, while
-mouse/keyboard features alone cannot separate it from a human at all.
+archetype's mouse and keyboard distributions *exactly*, so those two
+channels carry zero separable signal against it by construction (see
+`description.txt` on GAN-generated mouse trajectories and keystroke
+mimicry for why an attacker would specifically invest there). The
+non-zero recall it shows comes entirely from the scroll/click/engagement
+channels it does not mimic, plus (at the cost-optimal threshold) trading
+human pass rate for `sophisticated`-bot recall. That is the pipeline
+correctly recovering the partial signal the generator leaves available —
+not a demonstration of general robustness against every kind of mimicry.
 
 The report format and numbers above are real, computed output from this
 repo. The input data is not: it's synthetic, generated locally, with no
 interaction with any real website. Run
-`python -m not_a_robot.train --data <your sessions.jsonl>` on real,
-labeled traffic from your own site to get numbers you can actually trust
-for a production decision.
+`python -m not_a_robot.train --data <your sessions.jsonl> --seeds 0,1,2,3`
+on real, labeled traffic from your own site to get numbers you can
+actually trust for a production decision.
+
+## Auto-retrain per project
+
+`AutoRetrainStore` automates *when* a project's detector gets retrained,
+not *what counts as ground truth*. Each project gets its own store rooted
+at its own directory -- no data or model is shared across projects, and
+there's no code path that trains on anything but a session you've
+explicitly labeled:
+
+```python
+from not_a_robot import AutoRetrainStore
+
+store = AutoRetrainStore("path/to/project/.not_a_robot", min_new_sessions=50)
+
+# From your live scoring path (cheap -- just a file append):
+store.record_session(session)  # raises if session.label is None
+p_human = store.score(new_session)
+
+# From a separate periodic job (cron, a scheduled task) -- NOT the
+# request path: fitting + multi-seed CV takes tens of seconds, not ms.
+record = store.maybe_retrain()  # None if under min_new_sessions since last retrain
+```
+
+Or as a scheduled command:
+
+```bash
+python -m not_a_robot.autoretrain --root path/to/project/.not_a_robot --min-new-sessions 50
+```
+
+Real output from a run (30 sessions recorded, below the 50 threshold, then
+20 more crossing it):
+
+```
+pending after 30 sessions: 30
+maybe_retrain() result: None
+pending after 50 sessions: 50
+{
+  "timestamp": "2026-09-16T20:40:15.396101+00:00",
+  "n_sessions": 50,
+  "n_new_sessions": 50,
+  "seeds": [0, 1, 2],
+  "accuracy_range": [0.942, 0.946],
+  "human_pass_rate_range": [0.964, 0.972],
+  "bot_catch_rate_range": [0.92, 0.92]
+}
+model file exists: True
+```
+
+Each retrain fits on every session recorded so far, runs the same
+multi-seed `evaluate_cv` used above (so the record's ranges are the
+defensible cross-seed numbers, not a single split), backs up the model it
+replaces (`model.joblib.<timestamp>.bak`, never deleted automatically --
+rollback is a file copy), and appends the summary to `state.json`. Not
+built here, deliberately: any mechanism that would label sessions from
+the detector's own predictions or from unverified live traffic. That's
+the difference between "automates when you retrain" (this) and "trains
+itself on whatever it sees" (a real risk of training-data poisoning, and
+out of scope for this library — see [Scope](#scope)).
 
 ## Capturing real training data
 

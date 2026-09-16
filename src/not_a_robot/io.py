@@ -81,3 +81,10 @@ def save_sessions_jsonl(
         for session in sessions:
             f.write(json.dumps(session_to_dict(session)))
             f.write("\n")
+
+
+def append_session_jsonl(session: InteractionSession, path: Union[str, Path]) -> None:
+    """Append one session to a JSON-lines file, creating it if needed."""
+    with open(path, "a", encoding="utf-8") as f:
+        f.write(json.dumps(session_to_dict(session)))
+        f.write("\n")
