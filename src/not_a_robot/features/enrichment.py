@@ -9,6 +9,8 @@ ENRICHMENT_FEATURE_NAMES: tuple[str, ...] = (
     "key_rate_per_sec",
     "key_dwell_cv",
     "activity_balance",
+    "scroll_rate_per_sec",
+    "typed_vs_pasted_ratio",
 )
 
 
@@ -28,6 +30,8 @@ def extract_enrichment_features(base: dict[str, float]) -> dict[str, float]:
     mouse_activity = base.get("mouse_num_points", 0.0)
     key_activity = base.get("key_count", 0.0)
     total_activity = mouse_activity + key_activity
+    paste_chars = base.get("paste_total_chars", 0.0)
+    typed_and_pasted = key_activity + paste_chars
 
     return {
         "mouse_velocity_cv": vel_std / vel_mean if vel_mean > _EPS else 0.0,
@@ -37,5 +41,9 @@ def extract_enrichment_features(base: dict[str, float]) -> dict[str, float]:
         "key_dwell_cv": dwell_std / dwell_mean if dwell_mean > _EPS else 0.0,
         "activity_balance": (
             mouse_activity / total_activity if total_activity > _EPS else 0.0
+        ),
+        "scroll_rate_per_sec": base.get("scroll_event_count", 0.0) / duration_s,
+        "typed_vs_pasted_ratio": (
+            key_activity / typed_and_pasted if typed_and_pasted > _EPS else 1.0
         ),
     }

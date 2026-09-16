@@ -58,12 +58,25 @@ python -m examples.quickstart
 - **Timing / keystroke dynamics** (`not_a_robot.features.timing`): dwell
   time (key down -> up), flight time (key up -> next key down), time to
   first interaction, time to submit.
+- **Scroll behavior** (`not_a_robot.features.scroll`): total distance,
+  direction reversals, interval and delta statistics.
+- **Click/tap behavior** (`not_a_robot.features.clicks`): click count,
+  interval statistics, position variance (scripted clicks tend to land on
+  the exact same pixel repeatedly).
+- **Tab-focus and paste behavior** (`not_a_robot.features.engagement`):
+  blur/refocus count, paste count and total pasted characters.
 - **Enrichment ratios** (`not_a_robot.features.enrichment`): coefficients
-  of variation and per-second rates derived from the two feature groups
-  above (e.g. `mouse_velocity_cv`, `key_rate_per_sec`), which normalize
-  for session length/typing speed and tend to separate scripted, uniform
-  behavior from naturally variable human behavior better than any single
-  raw statistic.
+  of variation and per-second rates derived from the feature groups above
+  (e.g. `mouse_velocity_cv`, `key_rate_per_sec`, `scroll_rate_per_sec`,
+  `typed_vs_pasted_ratio`), which normalize for session length/typing
+  speed and tend to separate scripted, uniform behavior from naturally
+  variable human behavior better than any single raw statistic.
+
+Every field on `InteractionSession` (`mouse_events`, `key_events`,
+`scroll_events`, `click_events`, `focus_events`, `paste_events`) is
+optional and defaults to empty — you don't have to capture all of them to
+use the library, but the more of them you wire up client-side, the more
+signal the detector has to work with.
 
 All features are combined into one fixed-order vector
 (`not_a_robot.session.FEATURE_NAMES`) that feeds a scikit-learn classifier
@@ -110,37 +123,47 @@ python -m not_a_robot.train --synthetic --n-per-class 150
 ```
 
 That produced, on `python -m not_a_robot.train --synthetic --n-per-class 200 --seed 0`
-(200 sessions per class, 75/25 train/test split, 5-fold CV):
+(200 sessions per class, 75/25 train/test split, 5-fold CV, full feature
+set including scroll/click/focus/paste):
 
 ```
-Cross-validated accuracy: 97.0% +/- 2.2%
+Cross-validated accuracy: 95.3% +/- 1.9%
 
 Held-out test results:
-  Overall accuracy:   95.0%
+  Overall accuracy:   93.0%
   Human pass rate:    100.0%  (real users correctly verified as human)
-  Bot catch rate:     90.0%  (bots correctly blocked)
-  False accept rate:  10.0%  (bots that slipped through as human)
+  Bot catch rate:     86.0%  (bots correctly blocked)
+  False accept rate:  14.0%  (bots that slipped through as human)
   False reject rate:  0.0%   (real users wrongly blocked)
-  ROC-AUC:            0.940
+  ROC-AUC:            0.928
 ```
 
-Consistent across other seeds (1-3): 93-97% overall accuracy, 86-94% bot
-catch rate, human pass rate 100% every time.
+Across seeds 1-3: 95-100% overall accuracy, 92-100% bot catch rate, human
+pass rate 98-100%.
 
 The synthetic generator (`examples/synthetic_data.py`) draws bots from
 four weighted archetypes: naive (straight-line path, uniform keystrokes,
-45%), evasive (jittered but still tighter than human, 35%), headless
-(near-instant submit, little/no activity, 10%), and sophisticated (drawn
-from the *same* distribution as the human archetype, 10%) -- that last
-one is deliberately undetectable by a behavioral-only classifier, so the
-~10% false accept rate above isn't pipeline error, it's the generator's
-own designed detection ceiling showing up correctly in the report. That's
-what this run actually demonstrates: the pipeline's splitting, CV,
-fitting, metrics, and reporting all work end to end, and correctly
-recover a known-in-advance error floor. The report format and numbers
-are real; the input data for this particular run is not. Run
-`python -m not_a_robot.train --data <your sessions.jsonl>` on real,
-labeled traffic from your own site to get numbers you can actually trust.
+fixed click coordinate, 45%), evasive (jittered but still tighter than
+human, scripted scroll, 35%), headless (near-instant submit, little/no
+activity, 10%), and sophisticated (drawn from the *same* generator as the
+human archetype -- including its scroll/click/focus/paste activity, 10%).
+That last archetype is deliberately undetectable by any classifier
+trained on this feature set, by construction, so the false accept rate
+above is not pipeline error or a gap the extra scroll/click/engagement
+features failed to close -- it's the generator's own designed detection
+ceiling (roughly the 10% "sophisticated" weight) showing up correctly in
+the report. Adding the scroll/click/focus/paste features did not (and,
+against this specific synthetic archetype, structurally could not) push
+accuracy meaningfully past that floor, since the "sophisticated" bot
+reuses the exact same generator as the human class down to every field.
+Against imperfect real-world mimicry those features should still help;
+this benchmark just isn't built to demonstrate that -- it's built to
+demonstrate that the pipeline's splitting, CV, fitting, metrics, and
+reporting correctly recover a known-in-advance error floor. The report
+format and numbers are real; the input data for this particular run is
+not. Run `python -m not_a_robot.train --data <your sessions.jsonl>` on
+real, labeled traffic from your own site to get numbers you can actually
+trust.
 
 ## Capturing real training data
 
@@ -155,11 +178,11 @@ persist them with `not_a_robot.io.save_sessions_jsonl()` (one JSON object
 per line) so `python -m not_a_robot.train --data sessions.jsonl` can pick
 them up later.
 
-`examples/synthetic_data.py` generates crude synthetic sessions (a jittery
-random walk vs. a near-straight constant-speed path) purely so the rest of
-the pipeline has example data to run against before you have real, labeled
-traffic. It is not a model of real bot or human behavior — replace it with
-your own data before relying on this for anything.
+`examples/synthetic_data.py` generates crude synthetic sessions (one
+human archetype and four weighted bot archetypes, see above) purely so
+the rest of the pipeline has example data to run against before you have
+real, labeled traffic. It is not a model of real bot or human behavior —
+replace it with your own data before relying on this for anything.
 
 ## Scope
 

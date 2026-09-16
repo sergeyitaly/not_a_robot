@@ -4,13 +4,25 @@ import json
 from pathlib import Path
 from typing import Union
 
-from .schema import InteractionSession, KeyEvent, MouseEvent
+from .schema import (
+    ClickEvent,
+    FocusEvent,
+    InteractionSession,
+    KeyEvent,
+    MouseEvent,
+    PasteEvent,
+    ScrollEvent,
+)
 
 
 def session_to_dict(session: InteractionSession) -> dict:
     return {
         "mouse_events": [[e.x, e.y, e.t] for e in session.mouse_events],
         "key_events": [[e.t_down, e.t_up] for e in session.key_events],
+        "scroll_events": [[e.t, e.delta_y] for e in session.scroll_events],
+        "click_events": [[e.x, e.y, e.t] for e in session.click_events],
+        "focus_events": [[e.t, e.focused] for e in session.focus_events],
+        "paste_events": [[e.t, e.length] for e in session.paste_events],
         "page_load_t": session.page_load_t,
         "submit_t": session.submit_t,
         "label": session.label,
@@ -24,6 +36,18 @@ def session_from_dict(data: dict) -> InteractionSession:
         ],
         key_events=[
             KeyEvent(t_down, t_up) for t_down, t_up in data.get("key_events", [])
+        ],
+        scroll_events=[
+            ScrollEvent(t, delta_y) for t, delta_y in data.get("scroll_events", [])
+        ],
+        click_events=[
+            ClickEvent(x, y, t) for x, y, t in data.get("click_events", [])
+        ],
+        focus_events=[
+            FocusEvent(t, focused) for t, focused in data.get("focus_events", [])
+        ],
+        paste_events=[
+            PasteEvent(t, length) for t, length in data.get("paste_events", [])
         ],
         page_load_t=data.get("page_load_t", 0.0),
         submit_t=data.get("submit_t"),

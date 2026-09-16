@@ -1,14 +1,18 @@
 """Synthetic session generator for demos and tests only.
 
 Produces one human archetype (a noisy random walk with occasional
-hesitation pauses, and variable keystroke dwell/flight times) and four
-bot archetypes of increasing sophistication, weighted toward the
-unsophisticated end since that's the realistic mix:
+hesitation pauses, variable keystroke dwell/flight times, occasional
+scrolling/tab-switching/pasting) and four bot archetypes of increasing
+sophistication, weighted toward the unsophisticated end since that's the
+realistic mix:
 
-- naive (45%): straight-line mouse path, perfectly uniform keystrokes
-- evasive (35%): jitter added to path and timing, but drawn from a
-  tighter/more uniform distribution than real humans produce
-- headless (10%): little to no mouse or key activity, near-instant submit
+- naive (45%): straight-line mouse path, perfectly uniform keystrokes,
+  a single click at a fixed coordinate, no scroll/focus/paste activity
+- evasive (35%): jitter added to path, timing, and click position, but
+  drawn from a tighter/more uniform distribution than real humans
+  produce; scripted scroll with near-uniform intervals
+- headless (10%): little to no mouse/key/scroll/click activity,
+  near-instant submit
 - sophisticated (10%): statistically indistinguishable from the human
   archetype by construction -- this represents the real-world ceiling on
   purely behavioral detection (see the README's note on invisible /
@@ -27,7 +31,15 @@ from __future__ import annotations
 
 import random
 
-from not_a_robot.schema import InteractionSession, KeyEvent, MouseEvent
+from not_a_robot.schema import (
+    ClickEvent,
+    FocusEvent,
+    InteractionSession,
+    KeyEvent,
+    MouseEvent,
+    PasteEvent,
+    ScrollEvent,
+)
 
 
 def _clip_positive(value: float, minimum: float) -> float:
@@ -46,6 +58,13 @@ def _human_like_session(rng: random.Random) -> InteractionSession:
         t += dt
         points.append(MouseEvent(x, y, t))
 
+    scroll_events = []
+    st = rng.uniform(200, 1200)
+    for _ in range(rng.randint(0, 6)):
+        direction = rng.choices([1, -1], weights=[3, 1])[0]
+        scroll_events.append(ScrollEvent(st, direction * rng.uniform(40, 220)))
+        st += rng.uniform(150, 900)
+
     keys = []
     kt = t + rng.uniform(200, 900)
     for _ in range(rng.randint(6, 20)):
@@ -58,9 +77,27 @@ def _human_like_session(rng: random.Random) -> InteractionSession:
             flight += rng.uniform(200, 600)
         kt = up + flight
 
+    click_events = [
+        ClickEvent(410 + rng.gauss(0, 4), 512 + rng.gauss(0, 4), kt + rng.uniform(40, 180))
+    ]
+
+    focus_events = []
+    if rng.random() < 0.25:  # tab-switch away and back
+        blur_t = rng.uniform(300, kt)
+        focus_events.append(FocusEvent(blur_t, False))
+        focus_events.append(FocusEvent(blur_t + rng.uniform(800, 4000), True))
+
+    paste_events = []
+    if rng.random() < 0.15:  # e.g. pasted from a password manager
+        paste_events.append(PasteEvent(kt - rng.uniform(50, 150), rng.randint(6, 20)))
+
     return InteractionSession(
         mouse_events=points,
         key_events=keys,
+        scroll_events=scroll_events,
+        click_events=click_events,
+        focus_events=focus_events,
+        paste_events=paste_events,
         page_load_t=0.0,
         submit_t=kt + rng.uniform(300, 900),
         label=True,
@@ -68,7 +105,8 @@ def _human_like_session(rng: random.Random) -> InteractionSession:
 
 
 def _bot_naive_session(rng: random.Random) -> InteractionSession:
-    """Unsophisticated bot: straight-line path, perfectly uniform keys."""
+    """Unsophisticated bot: straight-line path, perfectly uniform keys,
+    a single click at a hardcoded coordinate, no scroll/focus/paste."""
     x0, y0 = rng.uniform(0, 50), rng.uniform(0, 50)
     x1, y1 = x0 + rng.uniform(100, 300), y0 + rng.uniform(100, 300)
     n = rng.randint(5, 10)
@@ -85,9 +123,12 @@ def _bot_naive_session(rng: random.Random) -> InteractionSession:
         keys.append(KeyEvent(down, up))
         kt = up + 15.0
 
+    click_events = [ClickEvent(410.0, 512.0, kt + 15.0)]
+
     return InteractionSession(
         mouse_events=points,
         key_events=keys,
+        click_events=click_events,
         page_load_t=0.0,
         submit_t=kt + 10.0,
         label=False,
@@ -109,6 +150,12 @@ def _bot_evasive_session(rng: random.Random) -> InteractionSession:
         t = i * _clip_positive(rng.gauss(12, 2), 4.0)
         points.append(MouseEvent(x, y, t))
 
+    scroll_events = []
+    st = rng.uniform(50, 100)
+    for _ in range(rng.randint(0, 3)):
+        scroll_events.append(ScrollEvent(st, rng.gauss(150, 5)))
+        st += rng.gauss(100, 5)
+
     keys = []
     kt = points[-1].t + rng.uniform(80, 200)
     for _ in range(rng.randint(6, 20)):
@@ -119,9 +166,15 @@ def _bot_evasive_session(rng: random.Random) -> InteractionSession:
         flight = _clip_positive(rng.gauss(45, 8), 10.0)
         kt = up + flight
 
+    click_events = [
+        ClickEvent(410 + rng.gauss(0, 0.5), 512 + rng.gauss(0, 0.5), kt + 10.0)
+    ]
+
     return InteractionSession(
         mouse_events=points,
         key_events=keys,
+        scroll_events=scroll_events,
+        click_events=click_events,
         page_load_t=0.0,
         submit_t=kt + rng.uniform(30, 100),
         label=False,
@@ -130,7 +183,7 @@ def _bot_evasive_session(rng: random.Random) -> InteractionSession:
 
 def _bot_headless_session(rng: random.Random) -> InteractionSession:
     """Headless/scripted bot: fields set programmatically, near-instant
-    submit, little to no mouse activity."""
+    submit, little to no mouse/scroll/click activity."""
     points = []
     if rng.random() < 0.5:
         points = [MouseEvent(rng.uniform(0, 800), rng.uniform(0, 600), 0.0)]
@@ -154,15 +207,20 @@ def _bot_headless_session(rng: random.Random) -> InteractionSession:
 def _bot_sophisticated_session(rng: random.Random) -> InteractionSession:
     """A bot session statistically indistinguishable from a human one.
 
-    Deliberately reuses the human generator's distribution, only with
-    label=False. Represents the real-world ceiling on behavior-only
-    detection: no classifier trained on this feature set can separate
-    this archetype from real humans above chance, by construction.
+    Deliberately reuses the human generator's distribution (including
+    scroll/click/focus/paste activity), only with label=False. Represents
+    the real-world ceiling on behavior-only detection: no classifier
+    trained on this feature set can separate this archetype from real
+    humans above chance, by construction.
     """
     session = _human_like_session(rng)
     return InteractionSession(
         mouse_events=session.mouse_events,
         key_events=session.key_events,
+        scroll_events=session.scroll_events,
+        click_events=session.click_events,
+        focus_events=session.focus_events,
+        paste_events=session.paste_events,
         page_load_t=session.page_load_t,
         submit_t=session.submit_t,
         label=False,

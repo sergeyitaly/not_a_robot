@@ -21,6 +21,39 @@ class KeyEvent:
     t_up: float
 
 
+@dataclass(frozen=True)
+class ScrollEvent:
+    """A single scroll sample."""
+
+    t: float
+    delta_y: float  # positive = scrolled down, negative = scrolled up
+
+
+@dataclass(frozen=True)
+class ClickEvent:
+    """A single click/tap sample."""
+
+    x: float
+    y: float
+    t: float
+
+
+@dataclass(frozen=True)
+class FocusEvent:
+    """A window/tab focus transition."""
+
+    t: float
+    focused: bool  # True = focus gained, False = focus lost (blur)
+
+
+@dataclass(frozen=True)
+class PasteEvent:
+    """A paste-into-field event."""
+
+    t: float
+    length: int  # number of characters pasted
+
+
 @dataclass
 class InteractionSession:
     """One user session captured on your own page for training/scoring.
@@ -32,6 +65,10 @@ class InteractionSession:
 
     mouse_events: list[MouseEvent] = field(default_factory=list)
     key_events: list[KeyEvent] = field(default_factory=list)
+    scroll_events: list[ScrollEvent] = field(default_factory=list)
+    click_events: list[ClickEvent] = field(default_factory=list)
+    focus_events: list[FocusEvent] = field(default_factory=list)
+    paste_events: list[PasteEvent] = field(default_factory=list)
     page_load_t: float = 0.0
     submit_t: Optional[float] = None
     label: Optional[bool] = None
