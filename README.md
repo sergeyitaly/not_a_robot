@@ -15,7 +15,11 @@ This README can assert the pipeline works; [dry-run/](dry-run/) shows it:
 a live local demo (Docker or plain Python), one button, a real result --
 generates a synthetic batch across every archetype the library ships,
 scores and trains on it, and reports the actual accuracy / human-pass /
-bot-catch numbers the run just produced, not a mock.
+bot-catch numbers the run just produced, not a mock. The same click also
+runs the environment checks below against a **real headless Chromium
+instance launched via Selenium in the container**, not just a hardcoded
+example -- see [dry-run/README.md](dry-run/README.md) for what that
+found, including where its own no-GPU container limits what it can show.
 
 **Status:** 0.1.3, alpha. Validated only on synthetic data so far; the
 pipeline ships here, real-traffic numbers are yours. See
@@ -310,6 +314,19 @@ A negative result means "no automation artifact was observed", not
 "this is a human": a stealth-patched bot passes every check here on
 purpose. That gap is exactly what `BotDetector`'s behavioral scoring
 exists for.
+
+**Verified against a real browser, not just asserted.** [dry-run/](dry-run/)
+launches an actual headless Chromium via Selenium and runs its real
+captured signals through `score_environment()`. Finding from building
+that: a naive one-line stealth patch (only overriding
+`navigator.webdriver`) does **not** evade detection -- the `cdc_*`
+properties still give it away, since that patch never touches them. A
+more thorough patch (also stripping `cdc_*` from `window` via CDP before
+page load) genuinely defeats both of those checks, but the WebGL check
+still caught it in that container, because the container has no real GPU
+-- not because the patch was incomplete. A stealth-patched instance with
+real GPU passthrough would pass this layer entirely. See
+[dry-run/README.md](dry-run/README.md) for the full walkthrough.
 
 **What this deliberately does not include: TLS/JA3-JA4 fingerprinting.**
 That happens at the TCP/TLS handshake, before any application code sees
