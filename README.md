@@ -11,16 +11,15 @@ browser automation for third-party challenges, or trajectory generation
 meant to fool someone else's detection. Full statement under
 [Scope](#scope).
 
+This README can assert the pipeline works; [dry-run/](dry-run/) shows it:
+a live local demo (Docker or plain Python), one button, a real result --
+generates a synthetic batch across every archetype the library ships,
+scores and trains on it, and reports the actual accuracy / human-pass /
+bot-catch numbers the run just produced, not a mock.
+
 **Status:** 0.1.1, alpha. Validated only on synthetic data so far; the
 pipeline ships here, real-traffic numbers are yours. See
 [Training pipeline and success-rate validation](#training-pipeline-and-success-rate-validation).
-
-Want to see it working before reading the API? [dry-run/](dry-run/) is a
-live local demo (Docker or plain Python) with a page that captures your
-real mouse/keyboard/scroll/click behavior, a **Run Test** button that
-scores it, buttons to instantly simulate each bot archetype, and a
-record-and-retrain flow that visibly updates the model's accuracy as you
-feed it more sessions.
 
 ## Install
 
