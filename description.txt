@@ -1,0 +1,39 @@
+The landscape of human verification (CAPTCHA) has shifted significantly. The visible puzzle—whether sliding a piece or rotating a figure—is increasingly just the surface layer. Modern systems rely heavily on behavioral telemetry (mouse curves, timing) and invisible risk scoring to make the final call .
+
+Below are the primary approaches to solving these challenges with Python, ranging from local ML models to commercial APIs.
+🧠 Local ML & Computer Vision Approaches
+
+If you want to build your own solver without relying on external services, you would train models on specific puzzle types.
+
+    Text/OCR Solvers: For distorted text CAPTCHAs, you can use captcha-vision-engine, which leverages Tesseract OCR for noisy images, or build CRNN (Convolutional Recurrent Neural Network) models that handle character segmentation automatically .
+
+    Image Grid Solvers (reCAPTCHA v2): Modern solutions use YOLO-based models (like YOLOv8) for object detection within the grid . Alternatively, captcha-solver-ai uses MobileNetV2 (ONNX runtime) to classify grid cells against a prompt like "traffic lights" .
+
+    Rotate/Slider Puzzles: These are often solved by combining computer vision (finding the gap or matching edges) with human-like mouse movement simulation. Some advanced approaches use GANs to generate realistic mouse drag trajectories that mimic human jitter and velocity curves, which is often the actual metric being checked .
+
+☁️ Commercial API Approaches (The "Solver as a Service" Route)
+
+This is the most common approach for large-scale automation because it outsources the detection arms race. You send the site URL and sitekey, and you get back a token.
+
+    2Captcha: Extremely popular with Python support (twocaptcha-python). It supports a massive range of types including reCAPTCHA v2/v3, Cloudflare Turnstile, GeeTest, and image grids .
+
+    CapSolver / CapMonster: Known for competitive pricing and speed, especially for reCAPTCHA and Turnstile tasks .
+
+    Anti-Captcha: Another long-standing service with strong support for more complex enterprise CAPTCHAs like AWS WAF and FunCaptcha/Arkose .
+
+🛠️ Hybrid / Browser Automation
+
+If you are using tools like Playwright or Selenium, there are wrappers that handle the visual interaction automatically.
+
+    VisionAIRecaptchaSolver: This library spins up a local Chromium instance and uses YOLO models to automatically detect and click the correct tiles for reCAPTCHA v2 challenges, then extracts the token .
+
+    Captcha-solver-ai (Playwright integration): As mentioned above, this can also operate directly on a live page, using its MobileNetV2 model to decide where to click .
+
+📊 Comparison Summary
+Approach	Best For	Effort Level	Example Library/Service
+OCR (Text)	Legacy distorted text	Low	captcha-vision-engine
+YOLO / CNN (Grid)	reCAPTCHA Image Challenges	High (Training)	VisionAIRecaptchaSolver
+Commercial API	Any type (Turnstile, GeeTest, etc.)	Low (Integration)	2Captcha, CapSolver
+Behavioral + CV	Slider/Rotate Puzzles	High	Custom GANs for mouse trails
+
+Important Note on Effectiveness: For simple text or basic image grids, local ML works well. However, for modern systems like Cloudflare Turnstile or reCAPTCHA v3, the visual puzzle is rarely the deciding factor. These systems primarily analyze invisible browser signals (canvas fingerprinting, proof-of-work, mouse entropy). In these cases, a local ML model that only solves the visible puzzle will often fail because the behavioral score flags the script as a bot before the puzzle is even submitted
