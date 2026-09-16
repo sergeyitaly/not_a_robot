@@ -21,7 +21,7 @@ instance launched via Selenium in the container**, not just a hardcoded
 example -- see [dry-run/README.md](dry-run/README.md) for what that
 found, including where its own no-GPU container limits what it can show.
 
-**Status:** 0.1.3, alpha. Validated only on synthetic data so far; the
+**Status:** 0.1.4, alpha. Validated only on synthetic data so far; the
 pipeline ships here, real-traffic numbers are yours. See
 [Training pipeline and success-rate validation](#training-pipeline-and-success-rate-validation).
 
@@ -335,6 +335,42 @@ the fingerprinting -- not a Python library. If you need that layer, it
 doesn't belong in this package at any level of "separate module"; build
 or buy it separately and combine its output the same way.
 
+### A third layer: `not_a_robot.request_fingerprint`
+
+Same pattern again, one level up the stack: HTTP header and User-Agent
+plausibility, not behavioral, not environment-level. Checks for known
+non-browser User-Agents (`python-requests`, `curl`, `Scrapy`, `okhttp`,
+`HeadlessChrome`, and similar), and -- only when the User-Agent claims a
+Chromium-based browser -- whether the request is missing headers real
+Chromium sends automatically (`Sec-Fetch-*`, `Sec-CH-UA`), plus a general
+missing-`Accept-Language`/`Accept-Encoding` check:
+
+```python
+from not_a_robot.request_fingerprint import signals_from_headers, score_request
+
+signals = signals_from_headers(request.headers)  # Flask/Werkzeug or any dict
+report = score_request(signals)
+report.is_suspicious  # True for a known scraper UA, or missing Chromium headers
+report.reasons
+```
+
+**Deliberately does not check header order or TLS/JA3-JA4 fingerprints.**
+Header order looks consistent for a given HTTP library, but a WSGI app
+behind a reverse proxy, load balancer, or CDN commonly sees headers
+normalized or reordered before your code ever sees them -- a check that
+silently misbehaves depending on your infrastructure is worse than no
+check. If you need real header-order or TLS fingerprinting, that has to
+happen at the proxy/WAF layer where the actual wire-level data is still
+visible, the same boundary drawn above for `not_a_robot.environment`.
+
+Considered and explicitly declined for this package: a bespoke rate
+limiter. Rate limiting is inherently a distributed, stateful problem
+(multiple app workers, multiple pods, over time) -- a naive in-process
+counter would be silently wrong the moment you run more than one worker,
+which is nearly every real deployment. That's a solved problem with
+mature dedicated tools (Flask-Limiter, nginx, your CDN/WAF); duplicating
+it badly here would be worse than not having it.
+
 ## Auto-retrain per project
 
 `AutoRetrainStore` automates *when* a project's detector gets retrained,
@@ -448,17 +484,71 @@ calibration did *not* fix. A detector whose limits are visible is one
 you can build a layered defense around. A detector whose limits are
 hidden gets trusted past its competence.
 
+## Coverage by bot class, if deployed as a pre-auth signal
+
+The three layers this package ships (behavioral, environment, request
+fingerprint) don't cover every adversary equally. Here's the honest
+breakdown, ordered from trivial to well-resourced:
+
+| Bot class | Environment layer | Behavioral layer | Overall |
+|---|---|---|---|
+| Unpatched Selenium/Puppeteer | Caught | Caught | Caught |
+| Headless Chrome (no GPU) | Caught | Caught | Caught |
+| Stealth-patched, container (no GPU) | Caught (WebGL) | Sometimes caught | Usually caught |
+| Stealth-patched, GPU passthrough | Passes | ~34% caught | Often passes |
+| Anti-detect browser + human-like automation | Passes | Weak signal | Passes |
+
+The bottom two rows are not a gap this package can close by adding more
+checks, and that's worth being precise about *why*, not just admitting
+it exists. The environment layer only sees what JavaScript can observe
+-- once every property it checks is either patched or genuinely real
+(GPU passthrough included), there's nothing left in that category to
+detect, not "nothing implemented yet." The behavioral layer is a
+per-session statistical classifier; a GAN-trajectory generator (the
+technique `description.txt` names as the real-world state of the art) is
+specifically trained to defeat exactly that kind of discriminator, and
+more feature engineering here doesn't change that it's the same category
+of signal the adversary already targets. Closing those rows for real
+needs signals categorically outside a per-session, client-observable
+library's reach: cross-session/fleet correlation (needs shared state
+across many sessions, not a per-session classifier -- the same objection
+raised against building rate limiting into this package), IP/ASN/proxy
+reputation (needs a third-party data source), or real production
+training data your own deployment accumulates over time (the ~34%
+sophisticated recall is from synthetic data; a classifier trained on
+actual captured sophisticated-bot sessions could do better, but that
+data doesn't exist until you have a deployment generating it).
+
+**What to actually do about the bottom two rows: don't gate on them,
+challenge on them.** Treat the behavioral score as a step-up trigger,
+not a binary allow/block: allow above a high-confidence threshold, block
+below a low-confidence one, and route the ambiguous middle -- which is
+exactly where rows 4-5 land -- to an actual challenge (a CAPTCHA, email
+verification, manual review) rather than a silent pass. This is a
+deployment pattern, not a new detection capability: `BotDetector.score()`
+already returns a continuous probability, and
+`pipeline.cost_optimal_threshold()` already exists to help you pick where
+the boundaries should sit for *your* cost ratio (see
+[Training pipeline and success-rate validation](#training-pipeline-and-success-rate-validation)).
+The honest claim this package can make is "reduces how often you need
+that challenge, and cheaply filters out the bots that don't bother
+evading it" -- not "replaces it."
+
 ## Scope
 
-This library builds defensive detection for a system you run and control:
-a behavioral classifier (`BotDetector`) and a separate, deterministic
-automation-artifact check (`not_a_robot.environment`). It intentionally
-does **not** include: CAPTCHA-solving (OCR, image-grid classifiers),
-browser automation for clicking through third-party challenges,
-integrations with CAPTCHA-solving services, synthetic mouse-trajectory
-generation meant to fool someone else's bot detection, or TLS/JA3-JA4
-fingerprinting (that layer requires a reverse proxy/WAF, not a Python
-library, and doesn't belong here regardless). Those are a different
+This library builds defensive detection for a system you run and
+control: a behavioral classifier (`BotDetector`), a deterministic
+automation-artifact check (`not_a_robot.environment`), and a
+deterministic HTTP header/User-Agent check (`not_a_robot.request_fingerprint`).
+It intentionally does **not** include: CAPTCHA-solving (OCR, image-grid
+classifiers), browser automation for clicking through third-party
+challenges, integrations with CAPTCHA-solving services, synthetic
+mouse-trajectory generation meant to fool someone else's bot detection,
+TLS/JA3-JA4 fingerprinting (that layer requires a reverse proxy/WAF, not
+a Python library, and doesn't belong here regardless), or rate limiting
+(a distributed, stateful infrastructure problem with mature dedicated
+tools already -- Flask-Limiter, nginx, your CDN/WAF -- not something a
+naive in-process counter here would do correctly). Those are a different
 (and, outside authorized testing of your own systems, frequently
 abusive) category of tool.
 

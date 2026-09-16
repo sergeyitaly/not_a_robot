@@ -116,6 +116,25 @@
         <tbody></tbody>
       </table>
 
+      <h3>Your request's own headers (real, not simulated)</h3>
+      <p class="result-note">
+        <code>not_a_robot.request_fingerprint</code> is a third,
+        deterministic layer: header/User-Agent plausibility checks,
+        separate from both the behavioral model and the environment
+        checks above. It deliberately does not check header order or TLS
+        fingerprints (JA3/JA4) -- see the main README's
+        <a href="../README.md#deterministic-automation-checks-separate-from-the-behavioral-model">Deterministic
+        automation checks section</a> for why. This row needs no
+        simulation: it's whatever HTTP client (your browser, curl, a
+        script) actually just called this endpoint to run this test.
+      </p>
+      <table id="your-request-table" class="history-table">
+        <thead>
+          <tr><th>User-Agent</th><th>Suspicious?</th><th>Reason(s)</th></tr>
+        </thead>
+        <tbody></tbody>
+      </table>
+
       <p class="result-note result-footer">
         All sessions shown are synthetic, generated locally by
         <code>examples/synthetic_data.py</code>. Real-traffic numbers

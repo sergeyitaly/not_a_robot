@@ -25,6 +25,7 @@ from flask import Flask, jsonify, request, send_from_directory
 from not_a_robot import AutoRetrainStore
 from not_a_robot.environment import EnvironmentSignals, score_environment
 from not_a_robot.io import session_from_dict, session_to_dict
+from not_a_robot.request_fingerprint import score_request, signals_from_headers
 
 try:
     from selenium import webdriver
@@ -318,6 +319,12 @@ def run_tests():
     catch-rate change always comes with the numbers needed to tell
     "composition drifted" from "the model genuinely learned something"
     apart.
+
+    Also scores this HTTP request's own headers via
+    not_a_robot.request_fingerprint -- whatever real client (browser,
+    curl, a script) is calling this endpoint right now. No simulation
+    needed for this one: the demo server already has a real request to
+    look at every time this runs.
     """
     batch = make_synthetic_dataset(n_per_class=10, seed=random.randrange(2**31))
 
@@ -348,6 +355,13 @@ def run_tests():
         for name, signals in _ENVIRONMENT_SCENARIOS
     ]
 
+    # Scores *this actual HTTP request's own headers* -- whatever real
+    # client (browser, curl, a script) called this endpoint. No
+    # simulation needed here: the demo server already receives a real
+    # request every time this runs.
+    your_request_signals = signals_from_headers(request.headers)
+    your_request_report = score_request(your_request_signals)
+
     return jsonify(
         {
             "results": results,
@@ -355,6 +369,12 @@ def run_tests():
             "label_composition": store.label_composition(),
             "group_composition": store.group_composition(),
             "environment_results": environment_results,
+            "your_request": {
+                "user_agent": your_request_signals.user_agent,
+                "is_suspicious": your_request_report.is_suspicious,
+                "reasons": your_request_report.reasons,
+                "checked": your_request_report.checked,
+            },
         }
     )
 

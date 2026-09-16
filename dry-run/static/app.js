@@ -49,6 +49,15 @@
     tbody.appendChild(row);
   }
 
+  function addYourRequestRow(userAgent, isSuspicious, reasons) {
+    const tbody = document.querySelector("#your-request-table tbody");
+    const row = document.createElement("tr");
+    const verdict = isSuspicious ? "yes" : "no";
+    const reasonText = reasons.length ? reasons.join("; ") : "--";
+    row.innerHTML = `<td>${userAgent || "(none sent)"}</td><td>${verdict}</td><td>${reasonText}</td>`;
+    tbody.appendChild(row);
+  }
+
   function formatComposition(labelComp, groupComp) {
     const groupPart = groupComp
       ? ` (naive ${groupComp.naive || 0}, evasive ${groupComp.evasive || 0}, ` +
@@ -61,6 +70,7 @@
     const progressEl = document.getElementById("autopilot-progress");
     document.querySelector("#results-table tbody").innerHTML = "";
     document.querySelector("#environment-table tbody").innerHTML = "";
+    document.querySelector("#your-request-table tbody").innerHTML = "";
     progressEl.textContent = "Running 20 tests and retraining... this can take a little while.";
 
     let data;
@@ -79,6 +89,13 @@
     (data.environment_results || []).forEach((r) =>
       addEnvironmentRow(r.scenario, r.is_automated, r.reasons)
     );
+    if (data.your_request) {
+      addYourRequestRow(
+        data.your_request.user_agent,
+        data.your_request.is_suspicious,
+        data.your_request.reasons
+      );
+    }
 
     const retrainData = data.retrain;
     if (retrainData) {
