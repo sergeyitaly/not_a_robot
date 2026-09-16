@@ -261,6 +261,63 @@ interaction with any real website. Run
 on real, labeled traffic from your own site to get numbers you can
 actually trust for a production decision.
 
+## Deterministic automation checks (separate from the behavioral model)
+
+`not_a_robot.environment` checks for browser-observable automation-
+framework artifacts -- `navigator.webdriver`, Selenium/ChromeDriver's
+injected `cdc_*` globals, Playwright/Puppeteer markers on `window`, and
+software-rendered WebGL (SwiftShader/llvmpipe/Mesa, consistent with
+headless without GPU passthrough). You capture these client-side the
+same way you capture mouse/keyboard events; the module just scores what
+you found:
+
+```python
+from not_a_robot.environment import EnvironmentSignals, score_environment
+
+env = score_environment(EnvironmentSignals(
+    webdriver_flag=True,          # navigator.webdriver === true
+    cdc_properties_present=False, # Selenium/ChromeDriver's cdc_* globals
+    webgl_renderer="Google SwiftShader",
+))
+env.is_automated  # True
+env.reasons        # ["navigator.webdriver is true", "WebGL is software-rendered ..."]
+```
+
+**This is not a fourth behavioral feature group, and it's not imported
+from the top-level `not_a_robot` package** -- both are deliberate.
+`score_environment()` returns a boolean plus which signal(s) fired, not
+a probability: these are near-certain markers when present, so there's
+no calibration or CV story here the way there is for `BotDetector`, and
+mixing a deterministic check into `FEATURE_NAMES` or `evaluate_cv`'s
+per-group Wilson CI report would misrepresent both. Combine the two
+scores at your application layer instead:
+
+```python
+env = score_environment(signals)
+behavioral = detector.score(session)
+if env.is_automated:
+    block()      # near-certain; skip the behavioral score
+else:
+    decide(behavioral)  # env check passed (or wasn't run) -- fall back
+```
+
+**What this does and doesn't buy you.** Every signal here is exactly
+what stealth plugins (`puppeteer-extra-plugin-stealth` and similar) and
+anti-detect browsers patch by default. A positive result is strong,
+cheap evidence of unsophisticated automation -- most credential-stuffing
+bots don't bother with stealth patches, so this catches real traffic.
+A negative result means "no automation artifact was observed", not
+"this is a human": a stealth-patched bot passes every check here on
+purpose. That gap is exactly what `BotDetector`'s behavioral scoring
+exists for.
+
+**What this deliberately does not include: TLS/JA3-JA4 fingerprinting.**
+That happens at the TCP/TLS handshake, before any application code sees
+the request, and requires a reverse proxy, WAF, or load balancer doing
+the fingerprinting -- not a Python library. If you need that layer, it
+doesn't belong in this package at any level of "separate module"; build
+or buy it separately and combine its output the same way.
+
 ## Auto-retrain per project
 
 `AutoRetrainStore` automates *when* a project's detector gets retrained,
@@ -376,13 +433,17 @@ hidden gets trusted past its competence.
 
 ## Scope
 
-This library builds a defensive behavioral classifier for a system you run
-and control. It intentionally does **not** include: CAPTCHA-solving (OCR,
-image-grid classifiers), browser automation for clicking through third-party
-challenges, integrations with CAPTCHA-solving services, or synthetic
-mouse-trajectory generation meant to fool someone else's bot detection.
-Those are a different (and, outside authorized testing of your own systems,
-frequently abusive) category of tool.
+This library builds defensive detection for a system you run and control:
+a behavioral classifier (`BotDetector`) and a separate, deterministic
+automation-artifact check (`not_a_robot.environment`). It intentionally
+does **not** include: CAPTCHA-solving (OCR, image-grid classifiers),
+browser automation for clicking through third-party challenges,
+integrations with CAPTCHA-solving services, synthetic mouse-trajectory
+generation meant to fool someone else's bot detection, or TLS/JA3-JA4
+fingerprinting (that layer requires a reverse proxy/WAF, not a Python
+library, and doesn't belong here regardless). Those are a different
+(and, outside authorized testing of your own systems, frequently
+abusive) category of tool.
 
 ## Development
 
