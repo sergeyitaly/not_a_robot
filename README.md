@@ -354,6 +354,26 @@ the rest of the pipeline has example data to run against before you have
 real, labeled traffic. It is not a model of real bot or human behavior —
 replace it with your own data before relying on this for anything.
 
+## Realistic value by scenario
+
+| Scenario | Value |
+|---|---|
+| Small site, comment spam, occasional scraping | High — pre-filter, reduce CAPTCHA frequency |
+| Login/checkout on a mid-size site | Medium — worth adding, but IP reputation + rate limits + device fingerprinting do more |
+| High-value target (banking, ticketing, account creation at scale) | Low on its own — needs to be one of 5–10 signals, most of which this package doesn't cover |
+| Research, teaching, detector template | High — the methodology is the product |
+| Replacing a commercial bot-management vendor | Not viable |
+
+**The honest one-liner:** it's useful the way a smoke detector is useful
+— it catches the common cases cheaply, and it doesn't replace a
+fire-suppression system. What makes it more useful than its raw accuracy
+suggests is that its limits are documented: the demo prints
+`sophisticated` passing, this README says the per-seed spread matters
+more than the pooled number, and the calibration section says what
+calibration did *not* fix. A detector whose limits are visible is one
+you can build a layered defense around. A detector whose limits are
+hidden gets trusted past its competence.
+
 ## Scope
 
 This library builds a defensive behavioral classifier for a system you run
