@@ -81,6 +81,41 @@
         <tbody></tbody>
       </table>
 
+      <h3>Live browser check (real Selenium, run in parallel)</h3>
+      <p class="result-note">
+        The table above scores a hardcoded example of what an unpatched/
+        stealth-patched Selenium session looks like, assuming real GPU
+        passthrough. This one is not an example: clicking Run Tests also
+        launches two <strong>real</strong> headless Chromium instances in
+        this container via Selenium -- one unpatched, one with a real CDP
+        stealth patch that overrides <code>navigator.webdriver</code>
+        <em>and</em> strips the injected <code>cdc_*</code> properties --
+        reads their actual signals, and scores them with the same
+        <code>score_environment()</code> call. Verified empirically while
+        building this: the stealth patch genuinely defeats both of those
+        checks (both read <code>false</code> after patching), but
+        <strong>both live instances run in this container</strong>, which
+        has no real GPU -- so WebGL falls back to software rendering and
+        still gets caught. That's not a contradiction with the hardcoded
+        scenario above, it's a limit of this demo: a stealth-patched
+        instance with real GPU passthrough would show a real renderer
+        string and pass this layer entirely -- exactly the class
+        <code>not_a_robot</code>'s behavioral scoring above exists to
+        catch, not something this container can demonstrate directly.
+        Runs concurrently
+        with the behavioral batch above (see
+        <code>app.run(threaded=True)</code> in <code>dry-run/app.py</code>),
+        not after it, since browser startup time has nothing to do with
+        the ML training time.
+      </p>
+      <div id="real-browser-status" class="result-note">Not run yet.</div>
+      <table id="real-browser-table" class="history-table">
+        <thead>
+          <tr><th>Scenario</th><th>Automated?</th><th>Reason(s)</th><th>Captured signals</th></tr>
+        </thead>
+        <tbody></tbody>
+      </table>
+
       <p class="result-note result-footer">
         All sessions shown are synthetic, generated locally by
         <code>examples/synthetic_data.py</code>. Real-traffic numbers

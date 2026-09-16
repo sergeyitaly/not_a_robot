@@ -7,6 +7,19 @@ FROM python:3.12-slim
 
 WORKDIR /app
 
+# Chromium + its matching chromedriver, for the real-browser check
+# behind /api/run_real_browser_checks in app.py: launches an actual
+# headless Chromium via Selenium and captures its real signals, rather
+# than only scoring a hardcoded example dict. Pinning to the apt-shipped
+# chromedriver (vs. Selenium Manager downloading one at runtime) keeps
+# this image usable offline.
+RUN apt-get update && apt-get install -y --no-install-recommends \
+        chromium \
+        chromium-driver \
+    && rm -rf /var/lib/apt/lists/*
+ENV CHROME_BIN=/usr/bin/chromium
+ENV CHROMEDRIVER_BIN=/usr/bin/chromedriver
+
 # not_a_robot comes from PyPI (dry-run/requirements.txt pins the version
 # this demo was built against), like any real consumer of the package.
 COPY dry-run/requirements.txt ./dry-run/requirements.txt

@@ -26,6 +26,15 @@ from not_a_robot import AutoRetrainStore
 from not_a_robot.environment import EnvironmentSignals, score_environment
 from not_a_robot.io import session_from_dict, session_to_dict
 
+try:
+    from selenium import webdriver
+    from selenium.webdriver.chrome.options import Options as ChromeOptions
+    from selenium.webdriver.chrome.service import Service as ChromeService
+
+    _SELENIUM_AVAILABLE = True
+except ImportError:  # pragma: no cover - depends on optional dry-run dependency
+    _SELENIUM_AVAILABLE = False
+
 # Reaches into the demo generator's private archetype functions on
 # purpose -- this is the same repo, not a public library boundary.
 from examples.synthetic_data import (
@@ -98,6 +107,90 @@ _ENVIRONMENT_SCENARIOS = [
         ),
     ),
 ]
+
+
+# Selenium's execute_script() wraps the given source as a function body,
+# so a top-level `return` is valid -- no extra (function(){...})() needed.
+_WEBGL_PROBE_JS = """
+const canvas = document.createElement('canvas');
+const gl = canvas.getContext('webgl') || canvas.getContext('experimental-webgl');
+if (!gl) { return [null, null]; }
+const dbg = gl.getExtension('WEBGL_debug_renderer_info');
+if (!dbg) { return [gl.getParameter(gl.RENDERER), gl.getParameter(gl.VENDOR)]; }
+return [gl.getParameter(dbg.UNMASKED_RENDERER_WEBGL), gl.getParameter(dbg.UNMASKED_VENDOR_WEBGL)];
+"""
+
+_CDC_PROBE_JS = "return Object.keys(window).some((k) => k.indexOf('cdc_') === 0);"
+
+# The standard stealth technique real plugins use: patch
+# navigator.webdriver via CDP *before* any page script runs, not after
+# with a plain post-load execute_script -- some checks (and real
+# detection code) read the property during page load, so patching too
+# late doesn't count as a fair stealth test.
+_STEALTH_PATCH_JS = """
+Object.defineProperty(navigator, 'webdriver', { get: () => undefined });
+for (const key of Object.getOwnPropertyNames(window)) {
+    if (key.indexOf('cdc_') === 0 || key.indexOf('$cdc_') === 0) {
+        try { delete window[key]; } catch (e) { /* ignore */ }
+    }
+}
+"""
+
+
+def _launch_headless_chrome(stealth: bool):
+    options = ChromeOptions()
+    options.binary_location = os.environ.get("CHROME_BIN", "/usr/bin/chromium")
+    options.add_argument("--headless=new")
+    options.add_argument("--no-sandbox")
+    options.add_argument("--disable-dev-shm-usage")
+    if stealth:
+        options.add_argument("--disable-blink-features=AutomationControlled")
+        options.add_experimental_option("excludeSwitches", ["enable-automation"])
+        options.add_experimental_option("useAutomationExtension", False)
+
+    service = ChromeService(
+        executable_path=os.environ.get("CHROMEDRIVER_BIN", "/usr/bin/chromedriver")
+    )
+    driver = webdriver.Chrome(service=service, options=options)
+    if stealth:
+        driver.execute_cdp_cmd(
+            "Page.addScriptToEvaluateOnNewDocument", {"source": _STEALTH_PATCH_JS}
+        )
+    return driver
+
+
+def _capture_real_browser_signals(stealth: bool) -> dict:
+    """Launch an actual headless Chromium via Selenium (not a hardcoded
+    example), capture its real navigator.webdriver / cdc_* / WebGL
+    signals, and run them through the real score_environment(). This is
+    the practical counterpart to _ENVIRONMENT_SCENARIOS: proof against a
+    live automation process running in this same container, not just an
+    illustrative dict."""
+    driver = _launch_headless_chrome(stealth)
+    try:
+        driver.get("about:blank")
+        webdriver_flag = driver.execute_script("return navigator.webdriver === true;")
+        cdc_present = driver.execute_script(_CDC_PROBE_JS)
+        renderer, vendor = driver.execute_script(_WEBGL_PROBE_JS)
+        signals = EnvironmentSignals(
+            webdriver_flag=bool(webdriver_flag),
+            cdc_properties_present=bool(cdc_present),
+            webgl_renderer=renderer,
+            webgl_vendor=vendor,
+        )
+        report = score_environment(signals)
+        return {
+            "signals": {
+                "webdriver_flag": signals.webdriver_flag,
+                "cdc_properties_present": signals.cdc_properties_present,
+                "webgl_renderer": signals.webgl_renderer,
+                "webgl_vendor": signals.webgl_vendor,
+            },
+            "is_automated": report.is_automated,
+            "reasons": report.reasons,
+        }
+    finally:
+        driver.quit()
 
 
 def _seed_baseline() -> None:
@@ -266,5 +359,40 @@ def run_tests():
     )
 
 
+@app.route("/api/run_real_browser_checks", methods=["POST"])
+def run_real_browser_checks():
+    """Launches two real headless Chromium instances via Selenium -- one
+    unpatched, one with the standard CDP stealth patch -- and reports
+    their actual captured signals through score_environment(). Meant to
+    be called concurrently with /api/run_tests (see static/app.js), not
+    sequentially after it: this endpoint's latency is dominated by
+    browser startup, which is independent of the behavioral batch's ML
+    training, so running them in parallel is a real wall-clock win, not
+    just a UI trick -- app.run(threaded=True) below is what makes that
+    actually concurrent server-side, not just dispatched concurrently by
+    the browser.
+    """
+    if not _SELENIUM_AVAILABLE:
+        return jsonify({"error": "selenium is not installed in this image"}), 503
+
+    results = []
+    for label, stealth in (
+        ("Real Selenium, unpatched (launched just now)", False),
+        ("Real Selenium, stealth-patched (launched just now)", True),
+    ):
+        try:
+            outcome = _capture_real_browser_signals(stealth)
+            results.append({"scenario": label, **outcome})
+        except Exception as exc:  # noqa: BLE001 - report any launch failure to the UI
+            results.append({"scenario": label, "error": str(exc)})
+
+    return jsonify({"results": results})
+
+
 if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=int(os.environ.get("PORT", 8000)), debug=False)
+    app.run(
+        host="0.0.0.0",
+        port=int(os.environ.get("PORT", 8000)),
+        debug=False,
+        threaded=True,
+    )

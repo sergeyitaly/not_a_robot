@@ -73,9 +73,32 @@ button drives real calls, not a mock:
    automated/not-automated verdict and reasons. This is a **separate
    table, not merged into the behavioral results** -- see the main
    README's [Deterministic automation checks section](../README.md#deterministic-automation-checks-separate-from-the-behavioral-model)
-   for why. The stealth-patched scenario is deliberately identical,
-   signal-for-signal, to the clean-browser one: that's the honest limit
-   of this layer, not a demo bug.
+   for why. The stealth-patched scenario assumes real GPU passthrough,
+   so it's deliberately identical, signal-for-signal, to the
+   clean-browser one: that's the honest limit of this layer, not a demo
+   bug.
+6. **In parallel** with the above (both fired from the same click via
+   `Promise.allSettled`, and actually processed concurrently server-side
+   -- see `app.run(..., threaded=True)` -- not just dispatched that way
+   by the browser), launches two **real** headless Chromium instances in
+   this container via Selenium: one unpatched, one with a real CDP
+   stealth patch (overrides `navigator.webdriver` *and* strips the
+   injected `cdc_*` properties from `window`), reads each one's actual
+   captured signals, and scores them with the same `score_environment()`
+   call. This isn't a hardcoded example -- it's the practical answer to
+   "can this package actually detect a real scraper." Verified while
+   building this: the stealth patch genuinely defeats both the
+   `navigator.webdriver` and `cdc_*` checks (both correctly read `false`
+   afterward), but this container has no real GPU, so WebGL falls back
+   to software rendering (`ANGLE (Google, Vulkan ... SwiftShader ...)`)
+   and still gets caught by that one signal alone. **Both live instances
+   run in this container**, so this demo can only ever show the
+   no-GPU case -- it structurally cannot show what a stealth-patched
+   instance with real GPU passthrough would look like. That instance
+   would show a real renderer string and pass the environment layer
+   entirely (`is_automated: false`), which is exactly the class
+   `not_a_robot`'s behavioral scoring exists to catch, not something
+   environment-layer checks can close on their own.
 
 ## Beyond the button
 

@@ -31,6 +31,24 @@
     tbody.appendChild(row);
   }
 
+  function addRealBrowserRow(scenario, isAutomated, reasons, signals, error) {
+    const tbody = document.querySelector("#real-browser-table tbody");
+    const row = document.createElement("tr");
+    if (error) {
+      row.innerHTML = `<td>${scenario}</td><td colspan="3">Failed: ${error}</td>`;
+      tbody.appendChild(row);
+      return;
+    }
+    const verdict = isAutomated ? "yes" : "no";
+    const reasonText = reasons.length ? reasons.join("; ") : "--";
+    const signalText =
+      `webdriver=${signals.webdriver_flag}, cdc_*=${signals.cdc_properties_present}, ` +
+      `webgl=${signals.webgl_renderer || "(none)"}`;
+    row.innerHTML =
+      `<td>${scenario}</td><td>${verdict}</td><td>${reasonText}</td><td>${signalText}</td>`;
+    tbody.appendChild(row);
+  }
+
   function formatComposition(labelComp, groupComp) {
     const groupPart = groupComp
       ? ` (naive ${groupComp.naive || 0}, evasive ${groupComp.evasive || 0}, ` +
@@ -39,12 +57,8 @@
     return `${labelComp.human} human / ${labelComp.bot} bot${groupPart}`;
   }
 
-  document.getElementById("btn-run-tests").addEventListener("click", async () => {
-    const btn = document.getElementById("btn-run-tests");
+  async function runBehavioralBatch() {
     const progressEl = document.getElementById("autopilot-progress");
-    const resultsEl = document.getElementById("results");
-    btn.disabled = true;
-    resultsEl.hidden = true;
     document.querySelector("#results-table tbody").innerHTML = "";
     document.querySelector("#environment-table tbody").innerHTML = "";
     progressEl.textContent = "Running 20 tests and retraining... this can take a little while.";
@@ -54,12 +68,10 @@
       data = await postJSON("/api/run_tests", {});
     } catch (e) {
       progressEl.textContent = `Failed: ${e}`;
-      btn.disabled = false;
       return;
     }
     if (data.error) {
       progressEl.textContent = data.error;
-      btn.disabled = false;
       return;
     }
 
@@ -83,8 +95,44 @@
     document.getElementById("m-composition").textContent =
       `Composition: ${formatComposition(data.label_composition, data.group_composition)} ` +
       "(design: 50/50 human/bot, bots 45/35/10/10 naive/evasive/headless/sophisticated)";
+  }
 
+  async function runRealBrowserChecks() {
+    const statusEl = document.getElementById("real-browser-status");
+    document.querySelector("#real-browser-table tbody").innerHTML = "";
+    statusEl.textContent = "Launching two real headless Chromium instances...";
+
+    let data;
+    try {
+      data = await postJSON("/api/run_real_browser_checks", {});
+    } catch (e) {
+      statusEl.textContent = `Failed: ${e}`;
+      return;
+    }
+    if (data.error) {
+      statusEl.textContent = data.error;
+      return;
+    }
+
+    data.results.forEach((r) =>
+      addRealBrowserRow(r.scenario, r.is_automated, r.reasons, r.signals, r.error)
+    );
+    statusEl.textContent = "Done.";
+  }
+
+  document.getElementById("btn-run-tests").addEventListener("click", async () => {
+    const btn = document.getElementById("btn-run-tests");
+    const resultsEl = document.getElementById("results");
+    btn.disabled = true;
     resultsEl.hidden = false;
+
+    // Two independent checks, fired concurrently (not one awaited after
+    // the other): the behavioral batch and the real-browser check don't
+    // depend on each other, and the server (app.run(threaded=True))
+    // actually processes them in parallel, not just dispatches them
+    // that way from the browser.
+    await Promise.allSettled([runBehavioralBatch(), runRealBrowserChecks()]);
+
     btn.disabled = false;
   });
 })();
