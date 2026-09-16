@@ -23,12 +23,20 @@
     return a;
   }
 
+  // 10 human / 10 bot (bots spread unevenly across archetypes, evenly
+  // enough for a demo) -- kept at a real 50/50 split on purpose. An
+  // earlier version of this batch was 4 human / 16 bot (20/80), which
+  // silently dragged the store's cumulative class balance away from the
+  // synthetic generator's 50/50 design with every click, deflating the
+  // post-retrain human pass rate the longer you clicked. Every batch
+  // recorded here, at every count, stays 50/50 so the cumulative ratio
+  // can't drift regardless of how many times this runs.
   const BATCH = [
-    ...Array(4).fill("human"),
-    ...Array(4).fill("naive"),
-    ...Array(4).fill("evasive"),
-    ...Array(4).fill("headless"),
-    ...Array(4).fill("sophisticated"),
+    ...Array(10).fill("human"),
+    ...Array(3).fill("naive"),
+    ...Array(3).fill("evasive"),
+    ...Array(2).fill("headless"),
+    ...Array(2).fill("sophisticated"),
   ];
 
   function addResultRow(archetype, score) {

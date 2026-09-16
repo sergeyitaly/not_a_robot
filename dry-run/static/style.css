@@ -114,6 +114,19 @@ button:disabled {
   margin: 20px 0 8px;
 }
 
+.result-note {
+  font-size: 0.85rem;
+  color: var(--muted);
+  margin: 8px 0 16px;
+  line-height: 1.5;
+}
+
+.result-footer {
+  margin-top: 20px;
+  padding-top: 14px;
+  border-top: 1px solid var(--border);
+}
+
 .metrics-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));

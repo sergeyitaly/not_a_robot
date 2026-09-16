@@ -26,6 +26,17 @@
 
     <div id="results" class="results" hidden>
       <h2>Result</h2>
+      <p class="result-note">
+        These metrics are the <strong>post-retrain</strong> model's
+        multi-seed cross-validated range across every session recorded so
+        far (see "Sessions trained on"). The table below is
+        <strong>this run's 20 fresh sessions</strong>, scored against the
+        model as it stood <em>before</em> this retrain -- so a row here
+        can show a score the header's post-retrain range wouldn't predict
+        on its own. They're measuring different things on purpose: the
+        header is the model you'd deploy next; the table is evidence of
+        what it just saw.
+      </p>
       <div class="metrics-grid">
         <div class="metric"><span class="metric-label">Sessions trained on</span><span id="m-sessions" class="metric-value">--</span></div>
         <div class="metric"><span class="metric-label">Accuracy</span><span id="m-accuracy" class="metric-value">--</span></div>
@@ -33,13 +44,28 @@
         <div class="metric"><span class="metric-label">Bot catch rate</span><span id="m-bot" class="metric-value">--</span></div>
       </div>
 
-      <h3>This run's 20 tests</h3>
+      <h3>This run's 20 tests (scored before retraining)</h3>
+      <p class="result-note">
+        <code>sophisticated</code> reuses the human archetype's mouse and
+        keyboard behavior by design (see the main README). Expect some of
+        the 2 sophisticated rows below to score above the 50% line most
+        runs, sometimes confidently so -- that's the documented ceiling on
+        purely behavioral detection, not a bug in this demo.
+      </p>
       <table id="results-table" class="history-table">
         <thead>
           <tr><th>Archetype</th><th>True label</th><th>Score (P human)</th></tr>
         </thead>
         <tbody></tbody>
       </table>
+
+      <p class="result-note result-footer">
+        All sessions shown are synthetic, generated locally by
+        <code>examples/synthetic_data.py</code>. Real-traffic numbers
+        require your own labeled sessions -- see the main README's
+        <a href="../README.md#capturing-real-training-data">Capturing
+        real training data</a> section.
+      </p>
     </div>
   </section>
 
