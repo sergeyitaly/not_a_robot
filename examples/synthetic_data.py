@@ -13,11 +13,14 @@ realistic mix:
   produce; scripted scroll with near-uniform intervals
 - headless (10%): little to no mouse/key/scroll/click activity,
   near-instant submit
-- sophisticated (10%): statistically indistinguishable from the human
-  archetype by construction -- this represents the real-world ceiling on
-  purely behavioral detection (see the README's note on invisible /
-  behavioral-score systems). No classifier trained only on this feature
-  set can catch this archetype above chance, on purpose.
+- sophisticated (10%): reuses the human archetype's mouse/keyboard/click
+  distributions (the signals that are well-documented and cheap for an
+  attacker to fake, e.g. GAN-generated mouse trajectories -- see
+  description.txt), but never scrolls, never blurs/refocuses, and never
+  pastes -- the secondary channels that are more effort to convincingly
+  automate. Mouse/keyboard features alone can't separate it from a human;
+  the scroll/click/engagement features can, imperfectly (some real humans
+  also don't scroll, blur, or paste in a given session).
 
 This gives the training pipeline a non-trivially-separable dataset with
 a genuine, non-zero error floor to validate against, instead of
@@ -101,6 +104,7 @@ def _human_like_session(rng: random.Random) -> InteractionSession:
         page_load_t=0.0,
         submit_t=kt + rng.uniform(300, 900),
         label=True,
+        group="human",
     )
 
 
@@ -132,6 +136,7 @@ def _bot_naive_session(rng: random.Random) -> InteractionSession:
         page_load_t=0.0,
         submit_t=kt + 10.0,
         label=False,
+        group="naive",
     )
 
 
@@ -178,6 +183,7 @@ def _bot_evasive_session(rng: random.Random) -> InteractionSession:
         page_load_t=0.0,
         submit_t=kt + rng.uniform(30, 100),
         label=False,
+        group="evasive",
     )
 
 
@@ -201,29 +207,39 @@ def _bot_headless_session(rng: random.Random) -> InteractionSession:
         page_load_t=0.0,
         submit_t=rng.uniform(5, 80),
         label=False,
+        group="headless",
     )
 
 
 def _bot_sophisticated_session(rng: random.Random) -> InteractionSession:
-    """A bot session statistically indistinguishable from a human one.
-
-    Deliberately reuses the human generator's distribution (including
-    scroll/click/focus/paste activity), only with label=False. Represents
-    the real-world ceiling on behavior-only detection: no classifier
-    trained on this feature set can separate this archetype from real
-    humans above chance, by construction.
+    """An advanced bot that closely mimics human mouse/keyboard/click
+    behavior -- the well-documented, cheap-to-fake signals (see
+    description.txt on GAN-generated mouse trajectories) -- but skips the
+    secondary channels that are more effort to convincingly automate:
+    scroll physics, multi-tab focus/blur cycling, and paste-vs-type
+    behavior. This is deliberately hard to catch on mouse/keyboard alone,
+    but not undetectable outright: a classifier with the scroll/click/
+    engagement features has real (if imperfect, since some real humans
+    also don't scroll or paste in a given session) signal to work with.
     """
-    session = _human_like_session(rng)
+    human_reference = _human_like_session(rng)
+    click_events = [
+        ClickEvent(
+            human_reference.click_events[0].x + rng.gauss(0, 2),
+            human_reference.click_events[0].y + rng.gauss(0, 2),
+            human_reference.click_events[0].t,
+        )
+    ]
     return InteractionSession(
-        mouse_events=session.mouse_events,
-        key_events=session.key_events,
-        scroll_events=session.scroll_events,
-        click_events=session.click_events,
-        focus_events=session.focus_events,
-        paste_events=session.paste_events,
-        page_load_t=session.page_load_t,
-        submit_t=session.submit_t,
+        mouse_events=human_reference.mouse_events,
+        key_events=human_reference.key_events,
+        click_events=click_events,
+        # no scroll_events/focus_events/paste_events: the channels this
+        # archetype doesn't bother faking
+        page_load_t=human_reference.page_load_t,
+        submit_t=human_reference.submit_t,
         label=False,
+        group="sophisticated",
     )
 
 

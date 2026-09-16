@@ -73,6 +73,12 @@ def extract_features(session: InteractionSession) -> dict[str, float]:
     return features
 
 
-def to_vector(features: dict[str, float]) -> list[float]:
-    """Order a feature dict into the fixed vector a model expects."""
-    return [features.get(name, 0.0) for name in FEATURE_NAMES]
+def to_vector(
+    features: dict[str, float], feature_names: tuple[str, ...] = FEATURE_NAMES
+) -> list[float]:
+    """Order a feature dict into the fixed vector a model expects.
+
+    Pass a subset of ``FEATURE_NAMES`` to restrict the vector -- used for
+    ablation studies comparing a detector with/without a feature group.
+    """
+    return [features.get(name, 0.0) for name in feature_names]

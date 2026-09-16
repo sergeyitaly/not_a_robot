@@ -26,6 +26,7 @@ def session_to_dict(session: InteractionSession) -> dict:
         "page_load_t": session.page_load_t,
         "submit_t": session.submit_t,
         "label": session.label,
+        "group": session.group,
     }
 
 
@@ -52,6 +53,7 @@ def session_from_dict(data: dict) -> InteractionSession:
         page_load_t=data.get("page_load_t", 0.0),
         submit_t=data.get("submit_t"),
         label=data.get("label"),
+        group=data.get("group"),
     )
 
 

@@ -84,32 +84,37 @@ All features are combined into one fixed-order vector
 
 ## Training pipeline and success-rate validation
 
-`not_a_robot.pipeline.run_training_pipeline()` is the full training and
-enrichment pipeline: it extracts the enriched feature set, splits off a
-stratified held-out test set, runs stratified k-fold cross-validation on
-the remaining training data, fits the final `BotDetector`, and evaluates it
-once on the untouched test set. It returns the fitted detector plus a
-`TrainingReport` framed around the numbers that actually matter for a
-"not a robot" check:
+There are two evaluation paths, and they answer different questions.
 
-- **Human pass rate** — how often a real user is correctly verified as
-  human (test recall on the human class).
-- **Bot catch rate** — how often a bot session is correctly blocked.
-- **False accept rate** — bots that slipped through as human (the security
-  cost).
-- **False reject rate** — real users wrongly blocked (the UX cost).
-- Overall accuracy, precision, F1, ROC-AUC, the full confusion matrix, and
-  the top features by importance.
+**`run_training_pipeline()`** fits the detector you'd actually deploy: it
+extracts the enriched feature set, splits off one stratified held-out test
+set, fits a `BotDetector` on the rest, and evaluates it once on that split.
+Useful for producing a model + a quick report, but its metrics are a
+**single point estimate** — on a dataset in the hundreds of sessions, one
+particular 75/25 split can look meaningfully better or worse than another
+just from sampling luck, not from anything about the model.
+
+**`evaluate_cv()`** answers "how much should I trust that number": it runs
+repeated stratified k-fold cross-validation (`n_splits x n_repeats`
+independent folds, a fresh model per fold, default 5x10 = 50), and reports
+the **mean and standard deviation** of every metric across folds, plus
+**recall broken out by `InteractionSession.group`** — a sub-population tag
+(e.g. a known bot type in real data, or the synthetic archetype below) —
+so an aggregate "bot catch rate" can't hide that all the errors are
+concentrated in one group. This is the number to actually trust; the CLI
+runs it by default alongside the single-split report.
 
 ```python
-from not_a_robot import run_training_pipeline
+from not_a_robot import run_training_pipeline, evaluate_cv
 
 detector, report = run_training_pipeline(sessions, data_source="prod-2026-09")
-print(report.summary())
 detector.save("bot_detector.joblib")
+
+cv_report = evaluate_cv(sessions, data_source="prod-2026-09")
+print(cv_report.summary())
 ```
 
-Or from the command line, against a real captured session log:
+From the command line, against a real captured session log:
 
 ```bash
 python -m not_a_robot.train --data sessions.jsonl --model-out bot_detector.joblib --report-out report.json
@@ -119,51 +124,65 @@ python -m not_a_robot.train --data sessions.jsonl --model-out bot_detector.jobli
 below) so you can see a real, computed report before you have real traffic:
 
 ```bash
-python -m not_a_robot.train --synthetic --n-per-class 150
+python -m not_a_robot.train --synthetic --n-per-class 200
 ```
 
-That produced, on `python -m not_a_robot.train --synthetic --n-per-class 200 --seed 0`
-(200 sessions per class, 75/25 train/test split, 5-fold CV, full feature
-set including scroll/click/focus/paste):
+That produced, on seed 0 (400 sessions, 5-fold x 10-repeat CV, full
+feature set):
 
 ```
-Cross-validated accuracy: 95.3% +/- 1.9%
+=== not_a_robot repeated-CV evaluation ===
+Sessions: 400 (5-fold x 10 repeats = 50 test folds)
 
-Held-out test results:
-  Overall accuracy:   93.0%
-  Human pass rate:    100.0%  (real users correctly verified as human)
-  Bot catch rate:     86.0%  (bots correctly blocked)
-  False accept rate:  14.0%  (bots that slipped through as human)
-  False reject rate:  0.0%   (real users wrongly blocked)
-  ROC-AUC:            0.928
+Accuracy:           92.8% +/- 2.2%
+Human pass rate:    96.2% +/- 3.6%
+Bot catch rate:     89.4% +/- 4.6%
+False accept rate:  10.7% +/- 4.6%
+False reject rate:  3.9% +/- 3.6%
+ROC-AUC:            0.990 +/- 0.006
+
+Per-group recall (mean +/- std across the folds each session
+appeared in as a test example):
+  group             weight   recall
+  human             50.0%   96.2% +/- 14.2%
+  naive             19.8%   100.0% +/- 0.0%
+  evasive           18.5%   100.0% +/- 0.0%
+  sophisticated      6.2%   14.8% +/- 23.7%
+  headless           5.5%   100.0% +/- 0.0%
 ```
 
-Across seeds 1-3: 95-100% overall accuracy, 92-100% bot catch rate, human
-pass rate 98-100%.
+Seeds 1 and 2 tell the same story: naive/evasive/headless bots caught at
+100.0% every time, `sophisticated` caught at 0.7% (seed 1) to 52.1% (seed
+2) with very high per-fold variance (that variance is itself the honest
+finding — a rare, weak signal isn't something to build a security decision
+on). Aggregate accuracy across the three seeds: 92.8-96.3%. **This is the
+correct way to read this benchmark: not "95% accurate," but "consistently
+catches unsophisticated and evasive bots, and catches a real but unreliable
+fraction of bots that mimic mouse/keyboard behavior closely."** A
+single-split `TrainingReport` on the same data can show bot catch rate
+anywhere from 78% to 100% depending on which sessions happened to land in
+the test split — that swing is sampling noise on a ~400-session synthetic
+set, not the model changing.
 
 The synthetic generator (`examples/synthetic_data.py`) draws bots from
 four weighted archetypes: naive (straight-line path, uniform keystrokes,
 fixed click coordinate, 45%), evasive (jittered but still tighter than
 human, scripted scroll, 35%), headless (near-instant submit, little/no
-activity, 10%), and sophisticated (drawn from the *same* generator as the
-human archetype -- including its scroll/click/focus/paste activity, 10%).
-That last archetype is deliberately undetectable by any classifier
-trained on this feature set, by construction, so the false accept rate
-above is not pipeline error or a gap the extra scroll/click/engagement
-features failed to close -- it's the generator's own designed detection
-ceiling (roughly the 10% "sophisticated" weight) showing up correctly in
-the report. Adding the scroll/click/focus/paste features did not (and,
-against this specific synthetic archetype, structurally could not) push
-accuracy meaningfully past that floor, since the "sophisticated" bot
-reuses the exact same generator as the human class down to every field.
-Against imperfect real-world mimicry those features should still help;
-this benchmark just isn't built to demonstrate that -- it's built to
-demonstrate that the pipeline's splitting, CV, fitting, metrics, and
-reporting correctly recover a known-in-advance error floor. The report
-format and numbers are real; the input data for this particular run is
-not. Run `python -m not_a_robot.train --data <your sessions.jsonl>` on
-real, labeled traffic from your own site to get numbers you can actually
-trust.
+activity, 10%), and sophisticated (10%) — which reuses the human
+archetype's mouse/keyboard/click distributions (the signals that are
+well-documented and cheap for an attacker to fake — see `description.txt`
+on GAN-generated mouse trajectories) but never scrolls, blurs, or pastes,
+since those channels are more effort to convincingly automate. That's why
+`sophisticated` is hard but not literally 0% catchable: the scroll/click/
+engagement features give real, if noisy, signal against it, while
+mouse/keyboard features alone cannot separate it from a human at all.
+
+The report format and numbers above are real, computed output from this
+repo. The input data is not: it's synthetic, generated locally, with no
+interaction with any real website. Run
+`python -m not_a_robot.train --data <your sessions.jsonl>` on real,
+labeled traffic from your own site to get numbers you can actually trust
+for a production decision.
 
 ## Capturing real training data
 

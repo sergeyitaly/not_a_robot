@@ -9,6 +9,13 @@ Usage:
 end-to-end before you have real, labeled traffic captured from your own
 site. It must be run from the repository root. Everywhere else, point
 ``--data`` at a JSONL file of sessions written by ``not_a_robot.io``.
+
+By default this also runs a repeated stratified k-fold evaluation
+(``--cv-splits`` x ``--cv-repeats`` folds) and prints its per-group recall
+breakdown -- that report, not the single held-out split from the training
+pipeline, is the one to trust: a single split's metrics on a small dataset
+are a point estimate with real sampling variance. Pass ``--no-cv-report``
+to skip it (e.g. for a quick run on a very large real dataset).
 """
 
 from __future__ import annotations
@@ -19,7 +26,7 @@ from pathlib import Path
 from typing import Optional
 
 from .io import load_sessions_jsonl
-from .pipeline import run_training_pipeline
+from .pipeline import evaluate_cv, run_training_pipeline
 from .schema import InteractionSession
 
 
@@ -48,6 +55,16 @@ def main(argv: Optional[list[str]] = None) -> int:
     parser.add_argument("--seed", type=int, default=0)
     parser.add_argument("--model-out", type=Path, default=Path("bot_detector.joblib"))
     parser.add_argument("--report-out", type=Path, default=None)
+    parser.add_argument(
+        "--cv-report",
+        dest="cv_report",
+        action="store_true",
+        default=True,
+        help="also run repeated stratified CV with per-group recall (default: on)",
+    )
+    parser.add_argument("--no-cv-report", dest="cv_report", action="store_false")
+    parser.add_argument("--cv-splits", type=int, default=5)
+    parser.add_argument("--cv-repeats", type=int, default=10)
     args = parser.parse_args(argv)
 
     if args.synthetic:
@@ -80,6 +97,17 @@ def main(argv: Optional[list[str]] = None) -> int:
         with open(args.report_out, "w", encoding="utf-8") as f:
             json.dump(report.__dict__, f, indent=2)
         print(f"Saved report to {args.report_out}")
+
+    if args.cv_report:
+        cv_report = evaluate_cv(
+            sessions,
+            n_splits=args.cv_splits,
+            n_repeats=args.cv_repeats,
+            seed=args.seed,
+            data_source=data_source,
+        )
+        print()
+        print(cv_report.summary())
 
     return 0
 

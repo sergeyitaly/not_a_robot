@@ -61,6 +61,13 @@ class InteractionSession:
     ``label`` is only required for sessions used to train a BotDetector:
     True for a known-human session, False for a known-bot session, None
     for a session you only want to score.
+
+    ``group`` is an optional finer-grained tag beyond the human/bot label
+    -- e.g. a known bot sub-type ("credential-stuffing", "scraper"), a
+    traffic source, or (in the synthetic demo data) the archetype that
+    generated the session. It plays no role in training; it exists so
+    evaluation can report recall broken out by sub-population instead of
+    only an aggregate that can hide which group is driving the errors.
     """
 
     mouse_events: list[MouseEvent] = field(default_factory=list)
@@ -72,3 +79,4 @@ class InteractionSession:
     page_load_t: float = 0.0
     submit_t: Optional[float] = None
     label: Optional[bool] = None
+    group: Optional[str] = None
