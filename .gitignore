@@ -13,6 +13,11 @@ dist/
 # Local editor/agent tooling state, not library source
 .claude/
 .cursor/
-.github/
 .kiro/
 CLAUDE.md
+
+# Extension-generated GitHub config, not real project CI -- .github/workflows/
+# itself IS real project CI and stays tracked
+.github/hooks/
+.github/instructions/
+.github/copilot-instructions.md
