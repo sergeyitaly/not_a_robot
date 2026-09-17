@@ -68,6 +68,41 @@ def test_maybe_retrain_waits_for_threshold_then_trains(tmp_path):
     assert store.maybe_retrain() is None
 
 
+def test_max_training_sessions_bounds_what_is_fitted(tmp_path):
+    store = AutoRetrainStore(
+        tmp_path / "proj",
+        min_new_sessions=1,
+        cv_seeds=(0,),
+        cv_n_splits=2,
+        cv_n_repeats=1,
+        max_training_sessions=40,
+    )
+    for session in make_synthetic_dataset(n_per_class=30, seed=7):  # 60 sessions
+        store.record_session(session)
+
+    record = store.maybe_retrain()
+    assert record is not None
+    # Trained on the window, not everything recorded.
+    assert record["n_sessions"] == 40
+    assert record["n_total_recorded"] == 60
+    assert sum(record["group_composition"].values()) == 40
+    # The whole log is still there -- older sessions aren't deleted.
+    assert store.total_session_count() == 60
+
+
+def test_maybe_retrain_without_window_fits_everything(tmp_path):
+    store = AutoRetrainStore(
+        tmp_path / "proj", min_new_sessions=1, cv_seeds=(0,), cv_n_splits=2, cv_n_repeats=1
+    )
+    for session in make_synthetic_dataset(n_per_class=15, seed=8):  # 30 sessions
+        store.record_session(session)
+
+    record = store.maybe_retrain()
+    assert record is not None
+    assert record["n_sessions"] == 30
+    assert record["n_total_recorded"] == 30
+
+
 def test_maybe_retrain_force_bypasses_threshold(tmp_path):
     store = AutoRetrainStore(tmp_path / "proj", min_new_sessions=1000, cv_seeds=(0,))
     for session in make_synthetic_dataset(n_per_class=10, seed=4):

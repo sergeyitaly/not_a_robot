@@ -66,6 +66,7 @@ class AutoRetrainStore:
         cv_n_splits: int = 5,
         cv_n_repeats: int = 10,
         feature_names: Optional[tuple[str, ...]] = None,
+        max_training_sessions: Optional[int] = None,
     ):
         self.root = Path(root)
         self.root.mkdir(parents=True, exist_ok=True)
@@ -77,6 +78,17 @@ class AutoRetrainStore:
         self.cv_n_splits = cv_n_splits
         self.cv_n_repeats = cv_n_repeats
         self.feature_names = feature_names
+        # None = train on every session ever recorded. Set it to bound
+        # retrain cost: fitting + multi-seed CV scales with the training
+        # set, so an always-growing log makes every retrain slower than
+        # the last one, without limit. A store fed continuously (a live
+        # scoring path, a public demo) will eventually stop being able
+        # to finish a retrain at all. With this set, each retrain trains
+        # on the most recent N sessions instead -- constant cost, and
+        # recent traffic is usually what you want a detector fitted to
+        # anyway. Older sessions stay in the log; they're just not
+        # trained on.
+        self.max_training_sessions = max_training_sessions
         self._detector_cache: Optional[BotDetector] = None
 
     def record_session(self, session: InteractionSession) -> None:
@@ -153,22 +165,37 @@ class AutoRetrainStore:
     def maybe_retrain(self, force: bool = False) -> Optional[dict]:
         """Retrain and redeploy if enough new sessions have accumulated.
 
-        Fits a fresh :class:`BotDetector` on every labeled session
-        recorded so far, runs multi-seed repeated CV
-        (``self.cv_seeds``) for an honest report, backs up the
-        previous model (if any), and writes the new one. Returns a
-        summary dict of the retrain, or ``None`` if the threshold
-        hasn't been reached (or there's not enough data at all) and
-        ``force`` is False.
+        Fits a fresh :class:`BotDetector` on the labeled sessions
+        recorded so far (or the most recent ``max_training_sessions`` of
+        them), runs multi-seed repeated CV (``self.cv_seeds``) for an
+        honest report, backs up the previous model (if any), and writes
+        the new one. Returns a summary dict of the retrain, or ``None``
+        if the threshold hasn't been reached (or there's not enough data
+        at all) and ``force`` is False.
+
+        Takes tens of seconds to minutes depending on data size --
+        call it from a periodic job or a background thread, never from
+        a request handler.
         """
-        sessions = self._load_all_sessions()
+        all_sessions = self._load_all_sessions()
         state = self._load_state()
         n_last = state.get("n_sessions_at_last_retrain", 0)
 
-        if len(sessions) < 4:
+        if len(all_sessions) < 4:
             return None
-        if not force and len(sessions) - n_last < self.min_new_sessions:
+        if not force and len(all_sessions) - n_last < self.min_new_sessions:
             return None
+
+        # The threshold checks above are about everything recorded; the
+        # fit below is about the training window (see
+        # max_training_sessions). Keeping them separate is deliberate --
+        # "enough new traffic has arrived to be worth retraining" and
+        # "how much of it to fit on" are different questions.
+        sessions = (
+            all_sessions[-self.max_training_sessions :]
+            if self.max_training_sessions is not None
+            else all_sessions
+        )
 
         data_source = f"{self.sessions_path} ({len(sessions)} labeled sessions)"
 
@@ -200,10 +227,23 @@ class AutoRetrainStore:
         detector.save(self.model_path)
         self._detector_cache = detector
 
+        # Composition of what was actually trained on (the window), not
+        # of the whole log -- the record describes this retrain. Recorded
+        # at all because accuracy/human_pass/bot_catch moving between
+        # retrains is otherwise unexplained, and a skewed
+        # naive/evasive/headless/sophisticated mix (drifted off whatever
+        # weights your data generator/collection intends) is frequently
+        # the reason.
+        trained_composition: dict[str, int] = {}
+        for s in sessions:
+            g = s.group if s.group is not None else ("human" if s.label else "bot")
+            trained_composition[g] = trained_composition.get(g, 0) + 1
+
         record = {
             "timestamp": datetime.now(timezone.utc).isoformat(),
             "n_sessions": len(sessions),
-            "n_new_sessions": len(sessions) - n_last,
+            "n_new_sessions": len(all_sessions) - n_last,
+            "n_total_recorded": len(all_sessions),
             "seeds": list(self.cv_seeds),
             "accuracy_range": [min(combined.accuracy), max(combined.accuracy)],
             "human_pass_rate_range": [
@@ -214,16 +254,9 @@ class AutoRetrainStore:
                 min(combined.bot_catch_rate),
                 max(combined.bot_catch_rate),
             ],
-            # group_composition() at this exact retrain, not just its
-            # numeric outcome -- accuracy/human_pass/bot_catch moving
-            # between retrains is otherwise unexplained; a skewed
-            # naive/evasive/headless/sophisticated mix (drifted off
-            # whatever weights your data generator/collection intends)
-            # is frequently the reason, and this is what makes that
-            # visible per-record instead of only as the current moment.
-            "group_composition": self.group_composition(),
+            "group_composition": trained_composition,
         }
-        state["n_sessions_at_last_retrain"] = len(sessions)
+        state["n_sessions_at_last_retrain"] = len(all_sessions)
         state.setdefault("history", []).append(record)
         self._save_state(state)
 
