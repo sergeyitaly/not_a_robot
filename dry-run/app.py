@@ -59,12 +59,23 @@ STATIC_DIR = Path(__file__).parent / "static"
 
 app = Flask(__name__, static_folder=None)
 
+# Configurable via env vars so a weak-CPU public deployment (Render's
+# free tier is 0.1 vCPU) can run a lighter CV depth than the local
+# Docker/plain-run default -- fitting CalibratedClassifierCV's 200-tree
+# RandomForest cv_seeds x cv_n_splits x cv_n_repeats times (x3 more for
+# isotonic calibration's own internal folds) is real CPU cost, and it
+# grows with total accumulated sessions on top of that. Trading CV
+# depth for response time on a public link is an explicit, visible
+# choice (see dry-run/README.md), not a silent shortcut -- the same
+# multi-seed methodology runs, just with fewer seeds/folds/repeats.
 store = AutoRetrainStore(
     STORE_ROOT,
-    min_new_sessions=5,
-    cv_seeds=(0, 1),
-    cv_n_splits=3,
-    cv_n_repeats=2,
+    min_new_sessions=int(os.environ.get("NOT_A_ROBOT_MIN_NEW_SESSIONS", "5")),
+    cv_seeds=tuple(
+        int(s) for s in os.environ.get("NOT_A_ROBOT_CV_SEEDS", "0,1").split(",")
+    ),
+    cv_n_splits=int(os.environ.get("NOT_A_ROBOT_CV_N_SPLITS", "3")),
+    cv_n_repeats=int(os.environ.get("NOT_A_ROBOT_CV_N_REPEATS", "2")),
 )
 
 _ARCHETYPES = {
@@ -288,9 +299,15 @@ def cooldown(seconds: float):
                 if forwarded_for
                 else (request.remote_addr or "unknown")
             )
+            # Keyed by (IP, route), not just IP: a single "Run Tests"
+            # click fires /api/run_tests and /api/run_real_browser_checks
+            # concurrently from the same client, and an IP-only key would
+            # have each route's own cooldown entry spuriously block the
+            # other route's very next call, every single click.
+            key = f"{client_ip}:{view.__name__}"
             now = time.monotonic()
             with _cooldown_lock:
-                last = _last_request_at.get(client_ip)
+                last = _last_request_at.get(key)
                 if last is not None and now - last < seconds:
                     wait = seconds - (now - last)
                     return (
@@ -307,7 +324,7 @@ def cooldown(seconds: float):
                         ),
                         429,
                     )
-                _last_request_at[client_ip] = now
+                _last_request_at[key] = now
             return view(*args, **kwargs)
 
         return wrapped
@@ -408,7 +425,7 @@ def simulate(archetype: str):
 
 
 @app.route("/api/run_tests", methods=["POST"])
-@cooldown(20)
+@cooldown(int(os.environ.get("NOT_A_ROBOT_COOLDOWN_SECONDS", "20")))
 def run_tests():
     """One atomic call behind the Run Tests button: generate a batch via
     make_synthetic_dataset() -- the same function the CLI's --synthetic
@@ -508,7 +525,7 @@ def run_tests():
 
 
 @app.route("/api/run_real_browser_checks", methods=["POST"])
-@cooldown(20)
+@cooldown(int(os.environ.get("NOT_A_ROBOT_COOLDOWN_SECONDS", "20")))
 def run_real_browser_checks():
     """Launches two real headless Chromium instances via Selenium -- one
     unpatched, one with the standard CDP stealth patch -- and reports

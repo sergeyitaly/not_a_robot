@@ -14,6 +14,13 @@
 #   first request after that cold-starts it (image already has
 #   Chromium + the seeded baseline model built in, so this is a Render
 #   platform delay, not an app one).
+# - The free plan's 0.1 vCPU is genuinely weak for this app's default
+#   CV depth (2 seeds x 3 splits x 2 repeats, x3 more for isotonic
+#   calibration's own internal folds per fit): measured taking multiple
+#   minutes per "Run Tests" click in practice, which is a bad experience
+#   even though it does eventually complete and save state correctly.
+#   The env vars below run a lighter CV depth on this deployment only --
+#   local Docker/plain-run keeps the full depth (app.py's own defaults).
 services:
   - type: web
     name: not-a-robot-demo
@@ -25,3 +32,11 @@ services:
     envVars:
       - key: NOT_A_ROBOT_STORE
         value: /app/dry-run-data
+      - key: NOT_A_ROBOT_CV_SEEDS
+        value: "0"
+      - key: NOT_A_ROBOT_CV_N_SPLITS
+        value: "2"
+      - key: NOT_A_ROBOT_CV_N_REPEATS
+        value: "1"
+      - key: NOT_A_ROBOT_COOLDOWN_SECONDS
+        value: "90"

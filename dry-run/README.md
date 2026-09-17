@@ -62,12 +62,26 @@ separate config needed. Two things to know before sharing the link:
 - `/api/run_tests` and `/api/run_real_browser_checks` both launch real
   headless Chromium and/or a multi-seed CV retrain per call -- expensive
   enough that a public link needs *some* abuse guard. Both routes carry
-  a 20-second per-IP cooldown (`app.py`'s `cooldown()` decorator, a
-  plain in-process dict). That's deliberately not the thing the main
-  README declines to build into the library: this is one Flask process
-  behind one demo link, not a distributed deployment, so an in-process
-  counter is the right tool here, not the same mistake at a different
-  scale.
+  a per-IP cooldown (`app.py`'s `cooldown()` decorator, a plain
+  in-process dict; 20s locally, `NOT_A_ROBOT_COOLDOWN_SECONDS` overrides
+  it -- `render.yaml` sets 90s). That's deliberately not the thing the
+  main README declines to build into the library: this is one Flask
+  process behind one demo link, not a distributed deployment, so an
+  in-process counter is the right tool here, not the same mistake at a
+  different scale.
+- **Render's free tier (0.1 vCPU) is genuinely weak for this app's
+  default CV depth.** Measured taking multiple minutes per "Run Tests"
+  click at the local defaults (2 seeds x 3 splits x 2 repeats, x3 more
+  for isotonic calibration's own internal folds per fit) -- it does
+  complete and save state correctly, but that's a bad experience for a
+  real visitor. `NOT_A_ROBOT_CV_SEEDS`/`NOT_A_ROBOT_CV_N_SPLITS`/
+  `NOT_A_ROBOT_CV_N_REPEATS`/`NOT_A_ROBOT_MIN_NEW_SESSIONS` let a
+  deployment run a lighter depth; `render.yaml` sets `CV_SEEDS=0`,
+  `CV_N_SPLITS=2`, `CV_N_REPEATS=1` (roughly a 3-4x reduction in RF fits
+  vs. the local default) specifically for this reason. Still the same
+  multi-seed methodology, just fewer seeds/folds -- an explicit,
+  documented trade of statistical breadth for response time on a public
+  link, not a silent shortcut.
 
 ## What happens when you click it
 
