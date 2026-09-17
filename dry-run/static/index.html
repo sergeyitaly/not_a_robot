@@ -11,13 +11,6 @@
 
   <header>
     <h1>not_a_robot -- live demo</h1>
-    <p class="sub">
-      One click, one real result. Generates 20 synthetic sessions across
-      every archetype the library ships (naive/evasive/headless/
-      sophisticated bots, and humans) with their true, known labels,
-      scores and records each against the live model, retrains, and
-      reports what the pipeline actually achieved.
-    </p>
   </header>
 
   <section class="panel highlight" id="autopilot-panel">
@@ -25,158 +18,137 @@
     <div id="autopilot-progress" class="autopilot-progress">Click to start.</div>
 
     <div id="results" class="results" hidden>
-      <h2>Result</h2>
-      <p class="result-note">
-        These metrics are the <strong>post-retrain</strong> model's
-        multi-seed cross-validated range across every session recorded so
-        far (see "Sessions trained on"). The table below is
-        <strong>this run's 20 fresh sessions</strong>, scored against the
-        model as it stood <em>before</em> this retrain -- so a row here
-        can show a score the header's post-retrain range wouldn't predict
-        on its own. They're measuring different things on purpose: the
-        header is the model you'd deploy next; the table is evidence of
-        what it just saw.
-      </p>
       <div class="metrics-grid">
-        <div class="metric"><span class="metric-label">Sessions trained on</span><span id="m-sessions" class="metric-value">--</span></div>
-        <div class="metric"><span class="metric-label">Accuracy</span><span id="m-accuracy" class="metric-value">--</span></div>
-        <div class="metric"><span class="metric-label">Human pass rate</span><span id="m-human" class="metric-value">--</span></div>
-        <div class="metric"><span class="metric-label">Bot catch rate</span><span id="m-bot" class="metric-value">--</span></div>
+        <div class="metric"><span class="metric-label">Sessions</span><span id="m-sessions" class="metric-value">--</span></div>
+        <div class="metric"><span class="metric-label">Human pass</span><span id="m-human" class="metric-value">--</span></div>
+        <div class="metric"><span class="metric-label">Bot catch</span><span id="m-bot" class="metric-value">--</span></div>
       </div>
-      <p id="m-composition" class="result-note"></p>
+      <p class="result-note small">Header: post-retrain CV across all sessions. Table: this run's 20, scored pre-retrain.</p>
 
-      <h3>Recent runs (last up to 3, most recent first)</h3>
-      <p class="result-note">
-        Each row is one retrain's multi-seed cross-validated range --
-        same metrics, same method as the header above, just kept around
-        instead of overwritten. Run this a few times: human pass rate
-        and bot catch rate move between runs (sample composition drifts
-        off its 45/35/10/10 design weight at this sample size, and
-        <code>sophisticated</code>/human scores genuinely overlap -- see
-        the main README's coverage table). This table is what makes that
-        variance visible without re-running by hand and remembering the
-        numbers.
-      </p>
-      <table id="history-table-runs" class="history-table">
-        <thead>
-          <tr><th>When</th><th>Sessions</th><th>Accuracy</th><th>Human pass</th><th>Bot catch</th></tr>
-        </thead>
-        <tbody></tbody>
-      </table>
-
-      <h3>This run's 20 tests (scored before retraining)</h3>
-      <p class="result-note">
-        <code>sophisticated</code> reuses the human archetype's mouse and
-        keyboard behavior by design (see the main README). It's drawn at
-        its design weight (10% of bots, so 0-2 rows most runs, sometimes
-        more) -- expect some of them to score above the 50% line,
-        sometimes confidently so. That's the documented ceiling on purely
-        behavioral detection, not a bug in this demo.
-      </p>
       <table id="results-table" class="history-table">
         <thead>
-          <tr><th>Archetype</th><th>True label</th><th>Score (P human)</th></tr>
+          <tr><th>Archetype</th><th>Score</th></tr>
         </thead>
         <tbody></tbody>
       </table>
 
-      <h3>Environment checks (separate, deterministic layer)</h3>
-      <p class="result-note">
-        <code>not_a_robot.environment</code> checks browser-observable
-        automation artifacts -- <code>navigator.webdriver</code>,
-        Selenium's <code>cdc_*</code> globals, Playwright/Puppeteer
-        markers, software-rendered WebGL. It's not part of the behavioral
-        model above; these are fixed, illustrative scenarios (not
-        generated per run) run through the real
-        <code>score_environment()</code> function. Look at the last row:
-        it's identical, signal-for-signal, to the clean-browser scenario
-        -- a stealth-patched bot passes every check here by design. That's
-        exactly the gap the behavioral model above exists to cover.
-      </p>
-      <table id="environment-table" class="history-table">
-        <thead>
-          <tr><th>Scenario</th><th>Automated?</th><th>Reason(s)</th></tr>
-        </thead>
-        <tbody></tbody>
-      </table>
+      <p id="m-verdict" class="verdict"></p>
+      <p id="m-verdict-cumulative" class="verdict-cumulative"></p>
+      <p id="m-composition" class="result-note small"></p>
 
-      <h3>Live browser check (real Selenium, run in parallel)</h3>
-      <p class="result-note">
-        The table above scores a hardcoded example of what an unpatched/
-        stealth-patched Selenium session looks like, assuming real GPU
-        passthrough. This one is not an example: clicking Run Tests also
-        launches two <strong>real</strong> headless Chromium instances in
-        this container via Selenium -- one unpatched, one with a real CDP
-        stealth patch that overrides <code>navigator.webdriver</code>
-        <em>and</em> strips the injected <code>cdc_*</code> properties --
-        reads their actual signals, and scores them with the same
-        <code>score_environment()</code> call. Verified empirically while
-        building this: the stealth patch genuinely defeats both of those
-        checks (both read <code>false</code> after patching), but
-        <strong>both live instances run in this container</strong>, which
-        has no real GPU -- so WebGL falls back to software rendering and
-        still gets caught. That's not a contradiction with the hardcoded
-        scenario above, it's a limit of this demo: a stealth-patched
-        instance with real GPU passthrough would show a real renderer
-        string and pass this layer entirely -- exactly the class
-        <code>not_a_robot</code>'s behavioral scoring above exists to
-        catch, not something this container can demonstrate directly.
-        Runs concurrently
-        with the behavioral batch above (see
-        <code>app.run(threaded=True)</code> in <code>dry-run/app.py</code>),
-        not after it, since browser startup time has nothing to do with
-        the ML training time.
-      </p>
-      <div id="real-browser-status" class="result-note">Not run yet.</div>
-      <table id="real-browser-table" class="history-table">
-        <thead>
-          <tr><th>Scenario</th><th>Automated?</th><th>Reason(s)</th><th>Captured signals</th></tr>
-        </thead>
-        <tbody></tbody>
-      </table>
+      <details id="sophisticated-details" class="note-details" hidden>
+        <summary id="sophisticated-summary"></summary>
+        <p class="result-note">
+          <code>sophisticated</code> reuses the human archetype's mouse and
+          keyboard behavior by design (see the main README). It's drawn at
+          its design weight (10% of bots, so 0-2 rows most runs, sometimes
+          more) -- expect some of them to score above the 50% line,
+          sometimes confidently so. That's the documented ceiling on purely
+          behavioral detection, not a bug in this demo.
+        </p>
+      </details>
 
-      <h3>Request header/User-Agent checks</h3>
-      <p class="result-note">
-        <code>not_a_robot.request_fingerprint</code> is a third,
-        deterministic layer: header/User-Agent plausibility checks,
-        separate from both the behavioral model and the environment
-        checks above. It deliberately does not check header order or TLS
-        fingerprints (JA3/JA4) -- see the main README's
-        <a href="../README.md#deterministic-automation-checks-separate-from-the-behavioral-model">Deterministic
-        automation checks section</a> for why. The first row needs no
-        simulation -- it's whatever HTTP client (your browser, curl, a
-        script) actually just called this endpoint to run this test; the
-        rest are fixed, illustrative inputs (a known scraper library, a
-        default headless-Chrome UA, and a Chromium UA missing the
-        headers real Chromium sends) so this layer's behavior is visible
-        on more than one row.
-      </p>
-      <table id="your-request-table" class="history-table">
-        <thead>
-          <tr><th>Scenario</th><th>User-Agent</th><th>Suspicious?</th><th>Reason(s)</th></tr>
-        </thead>
-        <tbody></tbody>
-      </table>
+      <details id="history-details" class="note-details">
+        <summary>Recent runs (last up to 3)</summary>
+        <table id="history-table-runs" class="history-table">
+          <thead>
+            <tr><th>When</th><th>Sessions</th><th>Accuracy</th><th>Human pass</th><th>Bot catch</th></tr>
+          </thead>
+          <tbody></tbody>
+        </table>
+      </details>
 
-      <p class="result-note result-footer">
-        All sessions shown are synthetic, generated locally by
-        <code>examples/synthetic_data.py</code>. Real-traffic numbers
-        require your own labeled sessions -- see the main README's
-        <a href="../README.md#capturing-real-training-data">Capturing
-        real training data</a> section.
-      </p>
+      <details id="environment-details" class="note-details">
+        <summary id="environment-summary">Environment checks: --</summary>
+        <p class="result-note">
+          <code>not_a_robot.environment</code> checks browser-observable
+          automation artifacts -- <code>navigator.webdriver</code>,
+          Selenium's <code>cdc_*</code> globals, Playwright/Puppeteer
+          markers, software-rendered WebGL. It's not part of the behavioral
+          model above; these are fixed, illustrative scenarios (not
+          generated per run) run through the real
+          <code>score_environment()</code> function. The stealth-patched
+          row is deliberately identical, signal-for-signal, to the
+          clean-browser scenario -- a stealth-patched bot passes every
+          check here by design. That's exactly the gap the behavioral
+          model above exists to cover.
+        </p>
+        <table id="environment-table" class="history-table">
+          <thead>
+            <tr><th>Scenario</th><th>Automated?</th><th>Reason(s)</th></tr>
+          </thead>
+          <tbody></tbody>
+        </table>
+      </details>
+
+      <details id="browser-details" class="note-details">
+        <summary id="browser-summary">Live Selenium check: --</summary>
+        <p class="result-note">
+          The table above scores a hardcoded example of what an unpatched/
+          stealth-patched Selenium session looks like, assuming real GPU
+          passthrough. This one is not an example: clicking Run Tests also
+          launches two <strong>real</strong> headless Chromium instances in
+          this container via Selenium -- one unpatched, one with a real CDP
+          stealth patch that overrides <code>navigator.webdriver</code>
+          <em>and</em> strips the injected <code>cdc_*</code> properties --
+          reads their actual signals, and scores them with the same
+          <code>score_environment()</code> call. Verified empirically while
+          building this: the stealth patch genuinely defeats both of those
+          checks (both read <code>false</code> after patching), but
+          <strong>both live instances run in this container</strong>, which
+          has no real GPU -- so WebGL falls back to software rendering and
+          still gets caught. That's not a contradiction with the hardcoded
+          scenario above, it's a limit of this demo: a stealth-patched
+          instance with real GPU passthrough would show a real renderer
+          string and pass this layer entirely -- exactly the class
+          <code>not_a_robot</code>'s behavioral scoring above exists to
+          catch, not something this container can demonstrate directly.
+          Runs concurrently with the behavioral batch above (see
+          <code>app.run(threaded=True)</code> in <code>dry-run/app.py</code>),
+          not after it, since browser startup time has nothing to do with
+          the ML training time.
+        </p>
+        <div id="real-browser-status" class="result-note">Not run yet.</div>
+        <table id="real-browser-table" class="history-table">
+          <thead>
+            <tr><th>Scenario</th><th>Automated?</th><th>Reason(s)</th><th>Captured signals</th></tr>
+          </thead>
+          <tbody></tbody>
+        </table>
+      </details>
+
+      <details id="request-details" class="note-details">
+        <summary id="request-summary">Request fingerprint: --</summary>
+        <p class="result-note">
+          <code>not_a_robot.request_fingerprint</code> is a third,
+          deterministic layer: header/User-Agent plausibility checks,
+          separate from both the behavioral model and the environment
+          checks above. It deliberately does not check header order or TLS
+          fingerprints (JA3/JA4) -- see the main README's
+          <a href="../README.md#deterministic-automation-checks-separate-from-the-behavioral-model">Deterministic
+          automation checks section</a> for why. The first row needs no
+          simulation -- it's whatever HTTP client (your browser, curl, a
+          script) actually just called this endpoint to run this test; the
+          rest are fixed, illustrative inputs (a known scraper library, a
+          default headless-Chrome UA, and a Chromium UA missing the
+          headers real Chromium sends) so this layer's behavior is visible
+          on more than one row.
+        </p>
+        <table id="your-request-table" class="history-table">
+          <thead>
+            <tr><th>Scenario</th><th>User-Agent</th><th>Suspicious?</th><th>Reason(s)</th></tr>
+          </thead>
+          <tbody></tbody>
+        </table>
+      </details>
     </div>
   </section>
 
   <footer>
     <p>
-      Scope note: this demo scores and trains on synthetic sessions
-      generated locally. It does not interact with, and cannot be used
-      to defeat, any third-party site's verification system. See the
-      project's <a href="../README.md#scope">Scope section</a> and
-      <a href="README.md">dry-run/README.md</a> for the full API
-      (<code>/api/score</code>, <code>/api/record</code>,
-      <code>AutoRetrainStore</code> directly) behind this button.
+      Synthetic sessions only, generated locally --
+      <a href="../README.md#scope">scope</a> ·
+      <a href="README.md">dry-run/README.md</a>
     </p>
   </footer>
 

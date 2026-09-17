@@ -121,6 +121,43 @@ button:disabled {
   line-height: 1.5;
 }
 
+.result-note.small {
+  font-size: 0.78rem;
+  margin: 4px 0 14px;
+}
+
+.verdict {
+  font-size: 1rem;
+  font-weight: 600;
+  margin: 4px 0 2px;
+}
+
+.verdict-cumulative {
+  font-size: 0.85rem;
+  color: var(--muted);
+  margin: 0 0 8px;
+}
+
+.note-details {
+  margin: 10px 0;
+  border-top: 1px solid var(--border);
+  padding-top: 10px;
+}
+
+.note-details summary {
+  cursor: pointer;
+  font-size: 0.9rem;
+  color: var(--text);
+}
+
+.note-details summary::marker {
+  color: var(--muted);
+}
+
+.note-details[open] summary {
+  margin-bottom: 10px;
+}
+
 .result-footer {
   margin-top: 20px;
   padding-top: 14px;
