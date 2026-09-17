@@ -25,12 +25,15 @@
       </div>
       <p class="result-note small">Header: post-retrain CV across all sessions. Table: this run's 20, scored pre-retrain.</p>
 
-      <table id="results-table" class="history-table">
-        <thead>
-          <tr><th>Archetype</th><th>Score</th></tr>
-        </thead>
-        <tbody></tbody>
-      </table>
+      <details id="results-table-details" class="note-details" open>
+        <summary>This run's 20 sessions</summary>
+        <table id="results-table" class="history-table">
+          <thead>
+            <tr><th>Archetype</th><th>Score</th></tr>
+          </thead>
+          <tbody></tbody>
+        </table>
+      </details>
 
       <p id="m-verdict" class="verdict"></p>
       <p id="m-verdict-cumulative" class="verdict-cumulative"></p>
@@ -50,9 +53,19 @@
 
       <details id="history-details" class="note-details">
         <summary>Recent runs (last up to 3)</summary>
+        <p class="result-note">
+          Composition is naive/evasive/headless/sophisticated, cumulative
+          as of that retrain. This is usually why bot catch moves between
+          rows: naive/evasive/headless are all caught near 100% (see the
+          main README's benchmark), so what actually shifts the aggregate
+          is the <code>sophisticated</code> fraction -- the one archetype
+          with a real, documented ceiling -- drifting off its 10% design
+          weight at this sample size, independent of anything the model
+          itself changed.
+        </p>
         <table id="history-table-runs" class="history-table">
           <thead>
-            <tr><th>When</th><th>Sessions</th><th>Accuracy</th><th>Human pass</th><th>Bot catch</th></tr>
+            <tr><th>When</th><th>Sessions</th><th>Composition</th><th>Human pass</th><th>Bot catch</th></tr>
           </thead>
           <tbody></tbody>
         </table>

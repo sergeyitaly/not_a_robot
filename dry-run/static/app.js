@@ -48,13 +48,36 @@
     tbody.appendChild(row);
   }
 
+  // "21/22/9/8" (naive/evasive/headless/sophisticated), the order used
+  // everywhere else in this file. "--" for history entries recorded
+  // before group_composition was added to AutoRetrainStore's records.
+  // Bolds the sophisticated count when it's above its 10% design
+  // weight of the bot total -- that's the archetype with a real,
+  // documented ceiling (see the main README), so an overrepresented
+  // sophisticated count is usually *why* bot catch moved, and this
+  // makes that visible without reading the note above the table.
+  function formatGroupCounts(groupComp) {
+    if (!groupComp) return "--";
+    const g = (name) => groupComp[name] || 0;
+    const naive = g("naive");
+    const evasive = g("evasive");
+    const headless = g("headless");
+    const sophisticated = g("sophisticated");
+    const totalBots = naive + evasive + headless + sophisticated;
+    const sophisticatedText =
+      totalBots > 0 && sophisticated > totalBots * 0.1
+        ? `<strong>${sophisticated}</strong>`
+        : `${sophisticated}`;
+    return `${naive}/${evasive}/${headless}/${sophisticatedText}`;
+  }
+
   function addHistoryRow(record) {
     const tbody = document.querySelector("#history-table-runs tbody");
     const row = document.createElement("tr");
     const when = new Date(record.timestamp).toLocaleTimeString();
     row.innerHTML =
       `<td>${when}</td><td>${record.n_sessions}</td>` +
-      `<td>${pct(record.accuracy_range)}</td>` +
+      `<td>${formatGroupCounts(record.group_composition)}</td>` +
       `<td>${pct(record.human_pass_rate_range)}</td>` +
       `<td>${pct(record.bot_catch_rate_range)}</td>`;
     tbody.appendChild(row);
@@ -95,8 +118,12 @@
     const bots = results.filter((r) => r.label === "bot");
     const humansPassed = humans.filter((r) => r.score >= 0.5).length;
     const botsBlocked = bots.filter((r) => r.score < 0.5).length;
+    // "(20 of 100)" when the total is known, so this run's numbers --
+    // which can be 10/10 one click and 7/10 the next -- don't read as
+    // "the model's overall behavior" instead of one sample of it.
+    const sampleNote = cumulative ? ` (${results.length} of ${cumulative.n_sessions})` : "";
     document.getElementById("m-verdict").textContent =
-      `This run: ${botsBlocked}/${bots.length} bots blocked, ` +
+      `This run${sampleNote}: ${botsBlocked}/${bots.length} bots blocked, ` +
       `${humansPassed}/${humans.length} humans passed.`;
 
     const cumulativeEl = document.getElementById("m-verdict-cumulative");
@@ -195,10 +222,12 @@
       document.getElementById("m-sessions").textContent = retrainData.n_sessions;
       document.getElementById("m-human").textContent = pct(retrainData.human_pass_rate_range);
       document.getElementById("m-bot").textContent = pct(retrainData.bot_catch_rate_range);
-      progressEl.textContent =
-        `Done. Retrained on ${retrainData.n_sessions} sessions (${retrainData.n_new_sessions} new).`;
+      // No "Done. Retrained on N sessions..." text here -- redundant
+      // with the verdict block and header metrics below, which already
+      // show this run's own numbers.
+      progressEl.textContent = "";
     } else {
-      progressEl.textContent = "Done scoring the batch. Not enough new sessions to retrain yet.";
+      progressEl.textContent = "Not enough new sessions to retrain yet.";
     }
 
     // Cumulative range for the verdict block: this run's own retrain if
