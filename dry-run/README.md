@@ -21,6 +21,20 @@ docker run --rm -p 8000:8000 not-a-robot-demo
 
 Then open <http://localhost:8000> and click **Run Tests**.
 
+**Or with Docker Compose** (works from any directory; paths in the
+compose file are relative to itself, not your shell):
+
+```bash
+docker compose -f dry-run/docker-compose.yml up --build
+```
+
+The only difference from the plain `docker build`/`docker run` above:
+Compose adds a named volume for `/app/dry-run-data`, so the
+`AutoRetrainStore`'s session log/model survive a container restart
+instead of reseeding from scratch every time. To get back to the clean
+baseline the `--rm` flow above gives you, tear the volume down too:
+`docker compose -f dry-run/docker-compose.yml down -v`.
+
 **Without Docker (from the repository root):**
 
 ```bash

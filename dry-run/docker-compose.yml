@@ -1,0 +1,31 @@
+# Run from anywhere (paths below are relative to this file, not your
+# shell's cwd):
+#   docker compose -f dry-run/docker-compose.yml up --build
+# Then open http://localhost:8000
+#
+# Equivalent to the Dockerfile's own `docker build`/`docker run` (see its
+# header comment) -- this just saves retyping the flags, and adds a named
+# volume so the AutoRetrainStore's session log/model survive a container
+# restart instead of reseeding from scratch every time, the way the
+# Dockerfile's `--rm` flow does. To get back to a clean baseline (the
+# behavior `docker run --rm` gives you), tear the volume down too:
+#   docker compose -f dry-run/docker-compose.yml down -v
+services:
+  dry-run:
+    build:
+      context: ..
+      dockerfile: dry-run/Dockerfile
+    image: not-a-robot-demo
+    ports:
+      - "8000:8000"
+    volumes:
+      - dry-run-data:/app/dry-run-data
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/')"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+
+volumes:
+  dry-run-data:
