@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<title>not-a-robot.js integration example</title>
+</head>
+<body>
+  <p>Minimal example wiring <code>not-a-robot.js</code> to a real form.
+  Move the mouse, type something, and submit -- the collector POSTs the
+  captured session to <code>/telemetry</code> alongside the real submit.</p>
+
+  <form id="signup-form" action="/submitted" method="get">
+    <input id="email" name="email" type="text" placeholder="email" autocomplete="off" />
+    <button type="submit">Sign up</button>
+  </form>
+
+  <pre id="last-score">not scored yet</pre>
+
+  <script src="/not-a-robot.js"></script>
+  <script>
+    var collector = new NotARobot.Collector({ endpoint: "/telemetry" });
+    collector.attachToForm("#signup-form");
+
+    // Not part of the library -- just polls this example's own endpoint
+    // so the page shows the score the server just computed.
+    document.getElementById("signup-form").addEventListener("submit", function () {
+      setTimeout(function () {
+        fetch("/last-score")
+          .then(function (r) { return r.json(); })
+          .then(function (data) {
+            document.getElementById("last-score").textContent = JSON.stringify(data, null, 2);
+          });
+      }, 300);
+    });
+  </script>
+</body>
+</html>

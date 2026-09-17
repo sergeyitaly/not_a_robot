@@ -45,3 +45,20 @@ def test_round_trip_through_jsonl(tmp_path):
     assert loaded[1].submit_t is None
     assert loaded[1].label is False
     assert loaded[1].scroll_events == []
+
+
+def test_session_from_dict_is_exported_from_top_level():
+    # This is the shape a telemetry endpoint receives from
+    # not-a-robot.js's POST body -- flat arrays, not label/group.
+    from not_a_robot import session_from_dict
+
+    session = session_from_dict(
+        {
+            "mouse_events": [[10, 12, 0]],
+            "key_events": [[100, 150]],
+            "submit_t": 500.0,
+        }
+    )
+    assert session.mouse_events[0].x == 10
+    assert session.key_events[0].t_up == 150
+    assert session.label is None

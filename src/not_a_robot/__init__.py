@@ -1,6 +1,11 @@
 from .autoretrain import AutoRetrainStore
 from .detector import BotDetector
-from .io import load_sessions_jsonl, save_sessions_jsonl
+from .io import (
+    load_sessions_jsonl,
+    save_sessions_jsonl,
+    session_from_dict,
+    session_to_dict,
+)
 from .pipeline import (
     CVReport,
     MultiSeedReport,
@@ -35,6 +40,8 @@ __all__ = [
     "channel_coverage",
     "load_sessions_jsonl",
     "save_sessions_jsonl",
+    "session_from_dict",
+    "session_to_dict",
     "run_training_pipeline",
     "TrainingReport",
     "evaluate_cv",

@@ -444,12 +444,51 @@ the difference between "automates when you retrain" (this) and "trains
 itself on whatever it sees" (a real risk of training-data poisoning, and
 out of scope for this library — see [Scope](#scope)).
 
+## Client-side capture: `not-a-robot.js`
+
+The library only defines the schema and the feature math; you still own
+serving and wiring the client-side capture into your own page. `js/not-a-robot.js`
+is a reference implementation of that side, matching the
+`InteractionSession` schema exactly — plain JS, no dependencies, no
+build step (~150 lines, read it end to end rather than treat it as a
+black box). It is **not part of the PyPI package** (a JS file has
+nothing to do with a Python wheel); copy it into your own static
+assets.
+
+```html
+<script src="/not-a-robot.js"></script>
+<script>
+  var collector = new NotARobot.Collector({ endpoint: "/telemetry" });
+  collector.attachToForm("#signup-form");
+</script>
+```
+
+`attachToForm` is fire-and-forget by default: the telemetry POST goes
+out alongside the real form submit (via `fetch(..., { keepalive: true })`,
+so it survives the page navigating away immediately after), without
+blocking or delaying it — a telemetry failure should never stop a real
+user from submitting a form. `examples/integrations/flask_app.py` and
+`examples/integrations/fastapi_app.py` show the server side end to end
+(serving the script, receiving `/telemetry`, scoring with
+`not_a_robot.session_from_dict()` + `BotDetector.score()`), runnable
+standalone:
+
+```bash
+pip install flask  # or: fastapi uvicorn
+PYTHONPATH=. python examples/integrations/flask_app.py
+```
+
+Verified against a real browser, not just asserted: driving this exact
+example with a real headless Chromium session (mouse movement via
+`ActionChains`, `send_keys()` into the email field, then a real form
+submit) produced a captured session the server correctly parsed and
+scored — 6 mouse events, 20 key events (matching the 20-character email
+typed), POSTed and received despite the page navigating to `/submitted`
+immediately after.
+
 ## Capturing real training data
 
-The library only defines the schema and the feature math; you own the
-client-side capture. On the page you're protecting, record `mousemove`
-coordinates + timestamps and `keydown`/`keyup` timestamps into
-`MouseEvent`/`KeyEvent` objects, tag each finished session with a label
+On the page you're protecting, tag each finished session with a label
 (from a secondary signal you trust — e.g. a CAPTCHA outcome, an email
 verification, or manual review), and either pass the collected
 `InteractionSession` objects straight to `run_training_pipeline()`, or
