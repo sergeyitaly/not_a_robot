@@ -533,12 +533,9 @@ captured Selenium sessions as bot: `score()` (P(human)) clusters at
 0.21–0.24 per session for a fixed training seed, and averages
 0.11–0.37 across 5 independent training seeds — comfortably under the
 0.5 threshold, but nowhere near saturated at 0.0. That's a genuinely
-useful result, but a narrow one in two ways: it validates
-generalization to exactly one automation profile (Selenium
-`ActionChains` + `send_keys` against a plain form, not Playwright,
-Puppeteer, CDP-driven mouse paths, or human-scale-jittered automation),
-and it is not the 10,000-session real-human benchmark this section
-still doesn't have — see the scope note above.
+useful result, but a narrow one: it is not the 10,000-session
+real-human benchmark this section still doesn't have — see the scope
+note above.
 
 Two artifacts in the capture worth knowing about if you look at the raw
 data: the ~240ms (±52ms) mouse-move interval comes from
@@ -551,6 +548,32 @@ in general. And 6 of the 20 sessions carry a spurious duplicate
 looks like headless Chromium's own window-init behavior rather than
 anything about user tab-switching; it doesn't affect the label, but
 don't read "has focus events" as a human signal in this dataset.
+
+**Does the Selenium result generalize to a different framework?**
+`dry-run/capture_playwright.py` drives the same `capture.html` page
+with Playwright instead — `page.mouse.move()` (single-jump calls,
+matching `ActionChains.move_by_offset()`'s granularity so the
+comparison isolates framework from movement smoothness) and
+`page.keyboard.type()` (like `send_keys()`, one real keydown/keyup pair
+per character via CDP, not synthesized in bulk). A sample ships at
+`examples/data/real_playwright_sample.jsonl`. Same detector, same 5
+training seeds: **20/20** Playwright sessions also caught, and more
+confidently than the Selenium sample (mean P(human) 0.05–0.20 across
+seeds, vs. 0.11–0.37 for Selenium). The reason shows up in the raw
+features: Playwright's CDP-based dispatch has far lower per-command
+latency than Selenium's WebDriver HTTP round-trips, so its captured
+sessions are faster overall (`mouse_duration_ms` 357ms vs. 1524ms,
+`time_to_submit_ms` 732ms vs. 1787ms) while keystroke dwell stays far
+below human range either way (3.8ms mean for Playwright, 0.3ms for
+Selenium — both react on "no human types keys back-to-back with
+near-zero, near-uniform dwell," just by different margins). That's
+evidence the result isn't a Selenium-specific quirk of one WebDriver
+implementation's timing — it's the same underlying signal (scripted
+typing doesn't hold keys down the way hands do) surviving a change of
+framework. It is still only two frameworks' *default* idioms, both
+against a plain, unthrottled local form; it says nothing about
+Puppeteer, CDP-driven mouse paths tuned to look human, or either
+framework deliberately slowed down to mimic human timing.
 
 ## Realistic value by scenario
 

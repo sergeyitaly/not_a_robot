@@ -34,6 +34,14 @@ COPY examples ./examples
 COPY dry-run/app.py ./dry-run/app.py
 COPY dry-run/static ./dry-run/static
 COPY dry-run/capture_real_automation.py ./dry-run/capture_real_automation.py
+# capture_playwright.py is a one-off analysis script, like the Selenium
+# one above, but not a dependency of the running demo (app.py never
+# imports it) -- so playwright itself is deliberately NOT in
+# requirements.txt/installed here. Its own docstring covers the one-line
+# `pip install playwright` needed before running it (no `playwright
+# install` step: it drives the same apt-installed /usr/bin/chromium via
+# executable_path, not a separately-downloaded browser).
+COPY dry-run/capture_playwright.py ./dry-run/capture_playwright.py
 
 ENV PYTHONPATH=/app
 ENV NOT_A_ROBOT_STORE=/app/dry-run-data
