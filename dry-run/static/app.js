@@ -49,6 +49,18 @@
     tbody.appendChild(row);
   }
 
+  function addHistoryRow(record) {
+    const tbody = document.querySelector("#history-table-runs tbody");
+    const row = document.createElement("tr");
+    const when = new Date(record.timestamp).toLocaleTimeString();
+    row.innerHTML =
+      `<td>${when}</td><td>${record.n_sessions}</td>` +
+      `<td>${pct(record.accuracy_range)}</td>` +
+      `<td>${pct(record.human_pass_rate_range)}</td>` +
+      `<td>${pct(record.bot_catch_rate_range)}</td>`;
+    tbody.appendChild(row);
+  }
+
   function addRequestFingerprintRow(scenario, userAgent, isSuspicious, reasons) {
     const tbody = document.querySelector("#your-request-table tbody");
     const row = document.createElement("tr");
@@ -73,6 +85,7 @@
     document.querySelector("#results-table tbody").innerHTML = "";
     document.querySelector("#environment-table tbody").innerHTML = "";
     document.querySelector("#your-request-table tbody").innerHTML = "";
+    document.querySelector("#history-table-runs tbody").innerHTML = "";
     progressEl.textContent = "Running 20 tests and retraining... this can take a little while.";
 
     let data;
@@ -94,6 +107,7 @@
     (data.request_fingerprint_results || []).forEach((r) =>
       addRequestFingerprintRow(r.scenario, r.user_agent, r.is_suspicious, r.reasons)
     );
+    (data.recent_history || []).forEach((r) => addHistoryRow(r));
 
     const retrainData = data.retrain;
     if (retrainData) {

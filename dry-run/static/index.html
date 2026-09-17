@@ -45,6 +45,25 @@
       </div>
       <p id="m-composition" class="result-note"></p>
 
+      <h3>Recent runs (last up to 3, most recent first)</h3>
+      <p class="result-note">
+        Each row is one retrain's multi-seed cross-validated range --
+        same metrics, same method as the header above, just kept around
+        instead of overwritten. Run this a few times: human pass rate
+        and bot catch rate move between runs (sample composition drifts
+        off its 45/35/10/10 design weight at this sample size, and
+        <code>sophisticated</code>/human scores genuinely overlap -- see
+        the main README's coverage table). This table is what makes that
+        variance visible without re-running by hand and remembering the
+        numbers.
+      </p>
+      <table id="history-table-runs" class="history-table">
+        <thead>
+          <tr><th>When</th><th>Sessions</th><th>Accuracy</th><th>Human pass</th><th>Bot catch</th></tr>
+        </thead>
+        <tbody></tbody>
+      </table>
+
       <h3>This run's 20 tests (scored before retraining)</h3>
       <p class="result-note">
         <code>sophisticated</code> reuses the human archetype's mouse and

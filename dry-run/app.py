@@ -394,6 +394,13 @@ def run_tests():
 
     retrain_result = store.maybe_retrain(force=True)
 
+    # Last few retrains' aggregates, most recent first -- makes the
+    # run-to-run variance in human pass rate / bot catch rate (driven by
+    # sample composition drifting off its 45/35/10/10 design weight, and
+    # by the sophisticated/human score overlap the README's coverage
+    # table describes) visible without re-running this by hand.
+    recent_history = list(reversed(store.history()[-3:]))
+
     environment_results = [
         {
             "scenario": name,
@@ -436,6 +443,7 @@ def run_tests():
             "group_composition": store.group_composition(),
             "environment_results": environment_results,
             "request_fingerprint_results": request_fingerprint_results,
+            "recent_history": recent_history,
         }
     )
 
