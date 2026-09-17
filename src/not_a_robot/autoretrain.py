@@ -34,6 +34,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import shutil
 from datetime import datetime, timezone
 from pathlib import Path
@@ -104,7 +105,12 @@ class AutoRetrainStore:
         return json.loads(self.state_path.read_text(encoding="utf-8"))
 
     def _save_state(self, state: dict) -> None:
-        self.state_path.write_text(json.dumps(state, indent=2), encoding="utf-8")
+        # Same write-temp-then-replace pattern as BotDetector.save(): a
+        # crash mid-write should leave the previous state.json intact,
+        # not a truncated one _load_state() can't parse.
+        tmp_path = self.state_path.with_name(self.state_path.name + ".tmp")
+        tmp_path.write_text(json.dumps(state, indent=2), encoding="utf-8")
+        os.replace(tmp_path, self.state_path)
 
     def pending_session_count(self) -> int:
         """How many labeled sessions have arrived since the last retrain."""

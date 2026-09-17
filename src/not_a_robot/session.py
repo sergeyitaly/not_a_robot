@@ -73,6 +73,27 @@ def extract_features(session: InteractionSession) -> dict[str, float]:
     return features
 
 
+def channel_coverage(session: InteractionSession) -> dict[str, bool]:
+    """Which event channels this session actually captured anything on.
+
+    A session with ``mouse_num_points == 0`` is ambiguous on its own: it
+    could mean "this user never moved the mouse" (a real, if unusual,
+    human pattern) or "the page's mouse-tracking script never loaded/fired"
+    (a capture failure, not a behavioral signal). This doesn't feed the
+    model -- it's for you to inspect when a session's feature vector looks
+    suspiciously empty, to tell those two cases apart before trusting the
+    label or the score.
+    """
+    return {
+        "mouse": len(session.mouse_events) > 0,
+        "key": len(session.key_events) > 0,
+        "scroll": len(session.scroll_events) > 0,
+        "click": len(session.click_events) > 0,
+        "focus": len(session.focus_events) > 0,
+        "paste": len(session.paste_events) > 0,
+    }
+
+
 def to_vector(
     features: dict[str, float], feature_names: tuple[str, ...] = FEATURE_NAMES
 ) -> list[float]:

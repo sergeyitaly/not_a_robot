@@ -19,7 +19,7 @@ from .schema import (
     PasteEvent,
     ScrollEvent,
 )
-from .session import FEATURE_NAMES, extract_features
+from .session import FEATURE_NAMES, channel_coverage, extract_features
 
 __all__ = [
     "BotDetector",
@@ -32,6 +32,7 @@ __all__ = [
     "PasteEvent",
     "FEATURE_NAMES",
     "extract_features",
+    "channel_coverage",
     "load_sessions_jsonl",
     "save_sessions_jsonl",
     "run_training_pipeline",
@@ -44,4 +45,4 @@ __all__ = [
     "AutoRetrainStore",
 ]
 
-__version__ = "0.1.4"
+__version__ = "0.1.5"

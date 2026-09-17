@@ -96,6 +96,13 @@ optional and defaults to empty — you don't have to capture all of them to
 use the library, but the more of them you wire up client-side, the more
 signal the detector has to work with.
 
+An empty channel is ambiguous, though: `mouse_num_points == 0` could mean
+"this session genuinely never moved the mouse" or "the mouse-tracking
+script never fired." `not_a_robot.channel_coverage(session)` reports
+which channels captured anything at all, so you can tell those two cases
+apart when a session's feature vector looks suspiciously empty. It's not
+part of the model's input — just a debugging/audit helper.
+
 All features are combined into one fixed-order vector
 (`not_a_robot.session.FEATURE_NAMES`) that feeds a scikit-learn classifier
 (`RandomForestClassifier` by default — pass your own via `BotDetector(model=...)`).

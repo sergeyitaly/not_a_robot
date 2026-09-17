@@ -1,7 +1,13 @@
 from __future__ import annotations
 
+import math
 from dataclasses import dataclass, field
 from typing import Optional
+
+
+def _require_finite(field_name: str, value: float) -> None:
+    if not math.isfinite(value):
+        raise ValueError(f"{field_name} must be a finite number, got {value!r}")
 
 
 @dataclass(frozen=True)
@@ -12,6 +18,11 @@ class MouseEvent:
     y: float
     t: float  # milliseconds since page load
 
+    def __post_init__(self) -> None:
+        _require_finite("x", self.x)
+        _require_finite("y", self.y)
+        _require_finite("t", self.t)
+
 
 @dataclass(frozen=True)
 class KeyEvent:
@@ -20,6 +31,14 @@ class KeyEvent:
     t_down: float
     t_up: float
 
+    def __post_init__(self) -> None:
+        _require_finite("t_down", self.t_down)
+        _require_finite("t_up", self.t_up)
+        if self.t_up < self.t_down:
+            raise ValueError(
+                f"KeyEvent.t_up ({self.t_up}) must be >= t_down ({self.t_down})"
+            )
+
 
 @dataclass(frozen=True)
 class ScrollEvent:
@@ -27,6 +46,10 @@ class ScrollEvent:
 
     t: float
     delta_y: float  # positive = scrolled down, negative = scrolled up
+
+    def __post_init__(self) -> None:
+        _require_finite("t", self.t)
+        _require_finite("delta_y", self.delta_y)
 
 
 @dataclass(frozen=True)
@@ -37,6 +60,11 @@ class ClickEvent:
     y: float
     t: float
 
+    def __post_init__(self) -> None:
+        _require_finite("x", self.x)
+        _require_finite("y", self.y)
+        _require_finite("t", self.t)
+
 
 @dataclass(frozen=True)
 class FocusEvent:
@@ -45,6 +73,9 @@ class FocusEvent:
     t: float
     focused: bool  # True = focus gained, False = focus lost (blur)
 
+    def __post_init__(self) -> None:
+        _require_finite("t", self.t)
+
 
 @dataclass(frozen=True)
 class PasteEvent:
@@ -52,6 +83,11 @@ class PasteEvent:
 
     t: float
     length: int  # number of characters pasted
+
+    def __post_init__(self) -> None:
+        _require_finite("t", self.t)
+        if self.length < 0:
+            raise ValueError(f"PasteEvent.length must be >= 0, got {self.length}")
 
 
 @dataclass
@@ -80,3 +116,8 @@ class InteractionSession:
     submit_t: Optional[float] = None
     label: Optional[bool] = None
     group: Optional[str] = None
+
+    def __post_init__(self) -> None:
+        _require_finite("page_load_t", self.page_load_t)
+        if self.submit_t is not None:
+            _require_finite("submit_t", self.submit_t)
