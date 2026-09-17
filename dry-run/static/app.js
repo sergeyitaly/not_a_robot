@@ -49,12 +49,14 @@
     tbody.appendChild(row);
   }
 
-  function addYourRequestRow(userAgent, isSuspicious, reasons) {
+  function addRequestFingerprintRow(scenario, userAgent, isSuspicious, reasons) {
     const tbody = document.querySelector("#your-request-table tbody");
     const row = document.createElement("tr");
     const verdict = isSuspicious ? "yes" : "no";
     const reasonText = reasons.length ? reasons.join("; ") : "--";
-    row.innerHTML = `<td>${userAgent || "(none sent)"}</td><td>${verdict}</td><td>${reasonText}</td>`;
+    row.innerHTML =
+      `<td>${scenario}</td><td>${userAgent || "(none sent)"}</td>` +
+      `<td>${verdict}</td><td>${reasonText}</td>`;
     tbody.appendChild(row);
   }
 
@@ -89,13 +91,9 @@
     (data.environment_results || []).forEach((r) =>
       addEnvironmentRow(r.scenario, r.is_automated, r.reasons)
     );
-    if (data.your_request) {
-      addYourRequestRow(
-        data.your_request.user_agent,
-        data.your_request.is_suspicious,
-        data.your_request.reasons
-      );
-    }
+    (data.request_fingerprint_results || []).forEach((r) =>
+      addRequestFingerprintRow(r.scenario, r.user_agent, r.is_suspicious, r.reasons)
+    );
 
     const retrainData = data.retrain;
     if (retrainData) {

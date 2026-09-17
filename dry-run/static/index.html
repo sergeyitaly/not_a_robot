@@ -116,7 +116,7 @@
         <tbody></tbody>
       </table>
 
-      <h3>Your request's own headers (real, not simulated)</h3>
+      <h3>Request header/User-Agent checks</h3>
       <p class="result-note">
         <code>not_a_robot.request_fingerprint</code> is a third,
         deterministic layer: header/User-Agent plausibility checks,
@@ -124,13 +124,17 @@
         checks above. It deliberately does not check header order or TLS
         fingerprints (JA3/JA4) -- see the main README's
         <a href="../README.md#deterministic-automation-checks-separate-from-the-behavioral-model">Deterministic
-        automation checks section</a> for why. This row needs no
-        simulation: it's whatever HTTP client (your browser, curl, a
-        script) actually just called this endpoint to run this test.
+        automation checks section</a> for why. The first row needs no
+        simulation -- it's whatever HTTP client (your browser, curl, a
+        script) actually just called this endpoint to run this test; the
+        rest are fixed, illustrative inputs (a known scraper library, a
+        default headless-Chrome UA, and a Chromium UA missing the
+        headers real Chromium sends) so this layer's behavior is visible
+        on more than one row.
       </p>
       <table id="your-request-table" class="history-table">
         <thead>
-          <tr><th>User-Agent</th><th>Suspicious?</th><th>Reason(s)</th></tr>
+          <tr><th>Scenario</th><th>User-Agent</th><th>Suspicious?</th><th>Reason(s)</th></tr>
         </thead>
         <tbody></tbody>
       </table>

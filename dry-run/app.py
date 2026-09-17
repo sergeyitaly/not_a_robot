@@ -25,7 +25,11 @@ from flask import Flask, jsonify, request, send_from_directory
 from not_a_robot import AutoRetrainStore
 from not_a_robot.environment import EnvironmentSignals, score_environment
 from not_a_robot.io import session_from_dict, session_to_dict
-from not_a_robot.request_fingerprint import score_request, signals_from_headers
+from not_a_robot.request_fingerprint import (
+    RequestSignals,
+    score_request,
+    signals_from_headers,
+)
 
 try:
     from selenium import webdriver
@@ -105,6 +109,51 @@ _ENVIRONMENT_SCENARIOS = [
             webdriver_flag=False,
             cdc_properties_present=False,
             webgl_renderer=_REAL_GPU_RENDERER,
+        ),
+    ),
+]
+
+# Same treatment for the request_fingerprint layer as _ENVIRONMENT_SCENARIOS
+# above: fixed, illustrative RequestSignals (not the real request's own
+# headers -- that's your_request, computed separately from the request
+# actually calling this endpoint), so the demo shows what this layer
+# catches on a few different inputs instead of asserting it works from
+# one real-but-arbitrary row.
+_REQUEST_FINGERPRINT_SCENARIOS = [
+    (
+        "python-requests script",
+        RequestSignals(
+            user_agent="python-requests/2.31.0",
+            accept_language_present=False,
+            accept_encoding_present=True,
+            sec_fetch_present=False,
+            sec_ch_ua_present=False,
+        ),
+    ),
+    (
+        "Headless Chrome, default UA",
+        RequestSignals(
+            user_agent=(
+                "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 "
+                "(KHTML, like Gecko) HeadlessChrome/120.0.0.0 Safari/537.36"
+            ),
+            accept_language_present=True,
+            accept_encoding_present=True,
+            sec_fetch_present=False,
+            sec_ch_ua_present=False,
+        ),
+    ),
+    (
+        "Chromium UA, missing Sec-Fetch-*/Sec-CH-UA",
+        RequestSignals(
+            user_agent=(
+                "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
+                "(KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+            ),
+            accept_language_present=True,
+            accept_encoding_present=True,
+            sec_fetch_present=False,
+            sec_ch_ua_present=False,
         ),
     ),
 ]
@@ -362,6 +411,23 @@ def run_tests():
     your_request_signals = signals_from_headers(request.headers)
     your_request_report = score_request(your_request_signals)
 
+    request_fingerprint_results = [
+        {
+            "scenario": "Your actual request",
+            "user_agent": your_request_signals.user_agent,
+            "is_suspicious": your_request_report.is_suspicious,
+            "reasons": your_request_report.reasons,
+        }
+    ] + [
+        {
+            "scenario": name,
+            "user_agent": signals.user_agent,
+            "is_suspicious": (report := score_request(signals)).is_suspicious,
+            "reasons": report.reasons,
+        }
+        for name, signals in _REQUEST_FINGERPRINT_SCENARIOS
+    ]
+
     return jsonify(
         {
             "results": results,
@@ -369,12 +435,7 @@ def run_tests():
             "label_composition": store.label_composition(),
             "group_composition": store.group_composition(),
             "environment_results": environment_results,
-            "your_request": {
-                "user_agent": your_request_signals.user_agent,
-                "is_suspicious": your_request_report.is_suspicious,
-                "reasons": your_request_report.reasons,
-                "checked": your_request_report.checked,
-            },
+            "request_fingerprint_results": request_fingerprint_results,
         }
     )
 
