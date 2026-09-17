@@ -60,6 +60,8 @@ def test_maybe_retrain_waits_for_threshold_then_trains(tmp_path):
     assert record["n_new_sessions"] == 50
     assert store.model_path.exists()
     assert 0.0 <= record["bot_catch_rate_range"][0] <= record["bot_catch_rate_range"][1] <= 1.0
+    assert sum(record["group_composition"].values()) == 50
+    assert record["group_composition"] == store.group_composition()
 
     # threshold resets: no new sessions since this retrain
     assert store.pending_session_count() == 0

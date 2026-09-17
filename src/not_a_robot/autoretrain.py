@@ -214,6 +214,14 @@ class AutoRetrainStore:
                 min(combined.bot_catch_rate),
                 max(combined.bot_catch_rate),
             ],
+            # group_composition() at this exact retrain, not just its
+            # numeric outcome -- accuracy/human_pass/bot_catch moving
+            # between retrains is otherwise unexplained; a skewed
+            # naive/evasive/headless/sophisticated mix (drifted off
+            # whatever weights your data generator/collection intends)
+            # is frequently the reason, and this is what makes that
+            # visible per-record instead of only as the current moment.
+            "group_composition": self.group_composition(),
         }
         state["n_sessions_at_last_retrain"] = len(sessions)
         state.setdefault("history", []).append(record)
