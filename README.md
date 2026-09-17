@@ -483,14 +483,28 @@ That's now fixed to match the evidence.
 
 Before and after that fix, a `BotDetector` trained purely on
 `examples/synthetic_data.py` correctly classified **20/20** of the real
-captured Selenium sessions as bot (`score()` — P(human) — averaged
-0.11–0.37 across 5 independent training seeds, all well under the 0.5
-threshold). That's a genuinely reassuring result, but a narrow one: it
-validates generalization to exactly one automation profile (Selenium
-`ActionChains` + `send_keys` against a plain form), not to Playwright,
-Puppeteer, CDP-driven mouse paths, or any human-scale-jittered
-automation library. It is not the 10,000-session real-human benchmark
-this section still doesn't have — see the scope note above.
+captured Selenium sessions as bot: `score()` (P(human)) clusters at
+0.21–0.24 per session for a fixed training seed, and averages
+0.11–0.37 across 5 independent training seeds — comfortably under the
+0.5 threshold, but nowhere near saturated at 0.0. That's a genuinely
+useful result, but a narrow one in two ways: it validates
+generalization to exactly one automation profile (Selenium
+`ActionChains` + `send_keys` against a plain form, not Playwright,
+Puppeteer, CDP-driven mouse paths, or human-scale-jittered automation),
+and it is not the 10,000-session real-human benchmark this section
+still doesn't have — see the scope note above.
+
+Two artifacts in the capture worth knowing about if you look at the raw
+data: the ~240ms (±52ms) mouse-move interval comes from
+`capture_real_automation.py` issuing one `ActionChains.perform()` call
+per move — a real WebDriver round-trip per command, not a client-side
+polling collector (`capture.html` uses `addEventListener("mousemove")`)
+— so it's a signal specific to that scripting pattern, not automation
+in general. And 6 of the 20 sessions carry a spurious duplicate
+`focus=true` pair 7–28ms after page load with no matching blur, which
+looks like headless Chromium's own window-init behavior rather than
+anything about user tab-switching; it doesn't affect the label, but
+don't read "has focus events" as a human signal in this dataset.
 
 ## Realistic value by scenario
 
