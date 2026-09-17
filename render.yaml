@@ -40,3 +40,13 @@ services:
         value: "1"
       - key: NOT_A_ROBOT_COOLDOWN_SECONDS
         value: "90"
+      # Anonymous public traffic grows the session log without limit,
+      # and a retrain fits on what's in it -- so without a window each
+      # retrain is slower than the last until none finish at all (this
+      # deployment reached exactly that state: 120 sessions recorded
+      # across 6 clicks with no completed retrain for ~3 hours). A
+      # window makes retrain cost constant no matter how many visitors
+      # click. Local/Docker runs leave it unset and keep training on
+      # everything.
+      - key: NOT_A_ROBOT_MAX_TRAINING_SESSIONS
+        value: "200"

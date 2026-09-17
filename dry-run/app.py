@@ -22,6 +22,7 @@ import threading
 import time
 from functools import wraps
 from pathlib import Path
+from typing import Optional
 
 from flask import Flask, jsonify, request, send_from_directory
 
@@ -68,6 +69,11 @@ app = Flask(__name__, static_folder=None)
 # depth for response time on a public link is an explicit, visible
 # choice (see dry-run/README.md), not a silent shortcut -- the same
 # multi-seed methodology runs, just with fewer seeds/folds/repeats.
+def _optional_int(name: str) -> Optional[int]:
+    raw = os.environ.get(name)
+    return int(raw) if raw else None
+
+
 store = AutoRetrainStore(
     STORE_ROOT,
     min_new_sessions=int(os.environ.get("NOT_A_ROBOT_MIN_NEW_SESSIONS", "5")),
@@ -76,6 +82,11 @@ store = AutoRetrainStore(
     ),
     cv_n_splits=int(os.environ.get("NOT_A_ROBOT_CV_N_SPLITS", "3")),
     cv_n_repeats=int(os.environ.get("NOT_A_ROBOT_CV_N_REPEATS", "2")),
+    # Unbounded locally (the full "trains on everything it's seen"
+    # story); bounded on a public deployment, where anonymous traffic
+    # grows the log forever and every retrain would otherwise be slower
+    # than the last one until none can finish at all.
+    max_training_sessions=_optional_int("NOT_A_ROBOT_MAX_TRAINING_SESSIONS"),
 )
 
 _ARCHETYPES = {
@@ -269,6 +280,42 @@ def _seed_baseline() -> None:
 
 
 _seed_baseline()
+
+# Retraining is minutes of CPU, not milliseconds -- AutoRetrainStore's
+# own docstring says to keep it off the request path, and a weak-CPU
+# public deployment is exactly where ignoring that bites: a click that
+# retrains inline holds the request open for minutes, and because each
+# click also *records* 20 more sessions first, the next retrain is
+# slower than the last one until none of them finish at all. So the
+# click records + scores (fast) and hands the retrain to this single
+# background worker; the UI reads the last *completed* retrain's
+# numbers, which is what the header/cumulative line already showed.
+_retrain_lock = threading.Lock()
+_retrain_running = False
+
+
+def _retrain_in_background() -> None:
+    """Start a retrain in a daemon thread, unless one is already running
+    (a second concurrent retrain would just contend for the same CPU and
+    write the same files)."""
+    global _retrain_running
+    with _retrain_lock:
+        if _retrain_running:
+            return
+        _retrain_running = True
+
+    def _run() -> None:
+        global _retrain_running
+        try:
+            store.maybe_retrain(force=True)
+        except Exception as exc:  # noqa: BLE001 - a failed retrain must not kill the worker
+            print(f"background retrain failed: {exc}")
+        finally:
+            with _retrain_lock:
+                _retrain_running = False
+
+    threading.Thread(target=_run, daemon=True).start()
+
 
 _cooldown_lock = threading.Lock()
 _last_request_at: dict[str, float] = {}
@@ -468,7 +515,7 @@ def run_tests():
             }
         )
 
-    retrain_result = store.maybe_retrain(force=True)
+    _retrain_in_background()
 
     # Last few retrains' aggregates, most recent first -- makes the
     # run-to-run variance in human pass rate / bot catch rate (driven by
@@ -514,7 +561,13 @@ def run_tests():
     return jsonify(
         {
             "results": results,
-            "retrain": retrain_result,
+            # The most recent *completed* retrain, not this click's --
+            # that one is still running in the background. The UI's
+            # header/cumulative numbers were always "the model as last
+            # trained" anyway; this just stops pretending the retrain
+            # finished within the request.
+            "retrain": recent_history[0] if recent_history else None,
+            "retrain_running": _retrain_running,
             "label_composition": store.label_composition(),
             "group_composition": store.group_composition(),
             "environment_results": environment_results,

@@ -223,11 +223,17 @@
       document.getElementById("m-human").textContent = pct(retrainData.human_pass_rate_range);
       document.getElementById("m-bot").textContent = pct(retrainData.bot_catch_rate_range);
       // No "Done. Retrained on N sessions..." text here -- redundant
-      // with the verdict block and header metrics below, which already
-      // show this run's own numbers.
+      // with the verdict block and header metrics below.
       progressEl.textContent = "";
-    } else {
-      progressEl.textContent = "Not enough new sessions to retrain yet.";
+    }
+
+    if (data.retrain_running) {
+      // Retraining takes minutes, so it runs in a background thread
+      // rather than holding this request open. Say so, instead of
+      // leaving a visitor wondering why the header didn't move.
+      progressEl.textContent =
+        "This run's 20 sessions are recorded; retraining on them in the " +
+        "background. The header/cumulative numbers update on your next run.";
     }
 
     // Cumulative range for the verdict block: this run's own retrain if
