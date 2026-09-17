@@ -49,6 +49,26 @@ needed so `examples/synthetic_data.py` is importable: it's demo-only
 (the archetype generators the button uses), not part of the published
 package, so it's only available from this checkout.
 
+**Deploying it publicly:** `render.yaml` at the repo root is a Render
+Blueprint -- on Render, "New +" -> "Blueprint", connect this repo, it's
+picked up automatically. It builds from `dry-run/Dockerfile` as-is; no
+separate config needed. Two things to know before sharing the link:
+
+- The free plan's filesystem is ephemeral -- the session log/model
+  reset on every redeploy or cold start after 15 minutes idle. That's
+  fine here (it's synthetic data, and it caps unbounded growth from
+  public traffic); add a paid persistent disk at
+  `NOT_A_ROBOT_STORE`'s path if you want state to survive.
+- `/api/run_tests` and `/api/run_real_browser_checks` both launch real
+  headless Chromium and/or a multi-seed CV retrain per call -- expensive
+  enough that a public link needs *some* abuse guard. Both routes carry
+  a 20-second per-IP cooldown (`app.py`'s `cooldown()` decorator, a
+  plain in-process dict). That's deliberately not the thing the main
+  README declines to build into the library: this is one Flask process
+  behind one demo link, not a distributed deployment, so an in-process
+  counter is the right tool here, not the same mistake at a different
+  scale.
+
 ## What happens when you click it
 
 `dry-run/app.py` is a thin Flask wrapper around the library -- the

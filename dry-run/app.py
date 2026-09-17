@@ -18,6 +18,9 @@ from __future__ import annotations
 
 import os
 import random
+import threading
+import time
+from functools import wraps
 from pathlib import Path
 
 from flask import Flask, jsonify, request, send_from_directory
@@ -256,6 +259,61 @@ def _seed_baseline() -> None:
 
 _seed_baseline()
 
+_cooldown_lock = threading.Lock()
+_last_request_at: dict[str, float] = {}
+
+
+def cooldown(seconds: float):
+    """Per-IP cooldown for this demo's own expensive routes (a full
+    multi-seed CV retrain, or launching real headless Chromium
+    instances). NOT the thing the main README declines to build into
+    the library itself -- that's about not_a_robot doing rate limiting
+    as a bot-detection *feature* across a distributed deployment
+    (multiple workers/pods, where an in-process counter is silently
+    wrong the moment you scale past one). This is one Flask process
+    backing one public demo link, protecting its own compute from
+    repeated clicks; an in-process dict is the right tool at this
+    scale, not the same mistake at a different scale.
+    """
+
+    def decorator(view):
+        @wraps(view)
+        def wrapped(*args, **kwargs):
+            # X-Forwarded-For can be a comma-separated chain (client,
+            # proxy1, proxy2, ...) behind a platform like Render -- the
+            # first entry is the original client.
+            forwarded_for = request.headers.get("X-Forwarded-For")
+            client_ip = (
+                forwarded_for.split(",")[0].strip()
+                if forwarded_for
+                else (request.remote_addr or "unknown")
+            )
+            now = time.monotonic()
+            with _cooldown_lock:
+                last = _last_request_at.get(client_ip)
+                if last is not None and now - last < seconds:
+                    wait = seconds - (now - last)
+                    return (
+                        jsonify(
+                            {
+                                "error": (
+                                    f"Please wait {wait:.0f}s before running again "
+                                    "-- this demo launches real browsers and "
+                                    "retrains a model per click, and a public "
+                                    "link needs a cooldown to stay usable for "
+                                    "everyone."
+                                )
+                            }
+                        ),
+                        429,
+                    )
+                _last_request_at[client_ip] = now
+            return view(*args, **kwargs)
+
+        return wrapped
+
+    return decorator
+
 
 @app.route("/")
 def index():
@@ -350,6 +408,7 @@ def simulate(archetype: str):
 
 
 @app.route("/api/run_tests", methods=["POST"])
+@cooldown(20)
 def run_tests():
     """One atomic call behind the Run Tests button: generate a batch via
     make_synthetic_dataset() -- the same function the CLI's --synthetic
@@ -449,6 +508,7 @@ def run_tests():
 
 
 @app.route("/api/run_real_browser_checks", methods=["POST"])
+@cooldown(20)
 def run_real_browser_checks():
     """Launches two real headless Chromium instances via Selenium -- one
     unpatched, one with the standard CDP stealth patch -- and reports

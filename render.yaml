@@ -1,0 +1,27 @@
+# Render Blueprint for the dry-run demo (Render looks for this file at
+# the repo root by default). Deploy: on Render, "New +" -> "Blueprint",
+# connect this repo, it picks this file up automatically. Or with the
+# CLI: `render blueprint launch`.
+#
+# Free-tier notes, deliberately not worked around:
+# - Filesystem is ephemeral on the free plan -- AutoRetrainStore's
+#   session log/model reset on every redeploy or cold start after the
+#   service spins down from inactivity. Fine for a public demo (self-
+#   limiting against unbounded growth from real traffic); if you want
+#   state to survive, add a paid persistent disk mounted at
+#   NOT_A_ROBOT_STORE's path.
+# - The free plan spins the service down after 15 minutes idle; the
+#   first request after that cold-starts it (image already has
+#   Chromium + the seeded baseline model built in, so this is a Render
+#   platform delay, not an app one).
+services:
+  - type: web
+    name: not-a-robot-demo
+    runtime: docker
+    dockerfilePath: ./dry-run/Dockerfile
+    dockerContext: .
+    plan: free
+    healthCheckPath: /
+    envVars:
+      - key: NOT_A_ROBOT_STORE
+        value: /app/dry-run-data
