@@ -1,0 +1,85 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<title>not_a_robot -- automation capture test page</title>
+</head>
+<body>
+  <p>Local test page for capturing real automation-tool telemetry.
+  Not a demo UI -- see dry-run/capture_real_automation.py.</p>
+
+  <div id="scroll-zone" style="height:120px; overflow-y:auto; border:1px solid #333; padding:8px;">
+    <p>line 1</p><p>line 2</p><p>line 3</p><p>line 4</p><p>line 5</p>
+    <p>line 6</p><p>line 7</p><p>line 8</p><p>line 9</p><p>line 10</p>
+  </div>
+
+  <input id="text-field" type="text" autocomplete="off" />
+  <button id="submit-btn" type="button">Submit</button>
+
+  <script>
+    (function () {
+      const pageLoadT = performance.now();
+      const now = () => performance.now() - pageLoadT;
+
+      window.__session = {
+        mouse_events: [],
+        key_events: [],
+        scroll_events: [],
+        click_events: [],
+        focus_events: [],
+        paste_events: [],
+        page_load_t: 0,
+        submit_t: null,
+        label: null,
+        group: null,
+      };
+
+      const keyDownTimes = {};
+
+      document.addEventListener("mousemove", (e) => {
+        window.__session.mouse_events.push([e.clientX, e.clientY, now()]);
+      });
+
+      document.addEventListener("click", (e) => {
+        window.__session.click_events.push([e.clientX, e.clientY, now()]);
+      });
+
+      window.addEventListener("blur", () => window.__session.focus_events.push([now(), false]));
+      window.addEventListener("focus", () => window.__session.focus_events.push([now(), true]));
+
+      const textField = document.getElementById("text-field");
+      textField.addEventListener("keydown", (e) => {
+        if (keyDownTimes[e.code] === undefined) keyDownTimes[e.code] = now();
+      });
+      textField.addEventListener("keyup", (e) => {
+        const down = keyDownTimes[e.code];
+        if (down !== undefined) {
+          window.__session.key_events.push([down, now()]);
+          delete keyDownTimes[e.code];
+        }
+      });
+      textField.addEventListener("paste", (e) => {
+        const clip = e.clipboardData || window.clipboardData;
+        const text = clip ? clip.getData("text") : "";
+        window.__session.paste_events.push([now(), text.length]);
+      });
+
+      // Listens for "scroll", not "wheel": a script driving scrollTop
+      // directly (the most common automation pattern) never fires a
+      // wheel event at all, and this should capture what automation
+      // *actually* does, not just what a real trackpad/mouse wheel does.
+      const scrollZone = document.getElementById("scroll-zone");
+      let lastScrollTop = 0;
+      scrollZone.addEventListener("scroll", () => {
+        const delta = scrollZone.scrollTop - lastScrollTop;
+        lastScrollTop = scrollZone.scrollTop;
+        window.__session.scroll_events.push([now(), delta]);
+      });
+
+      document.getElementById("submit-btn").addEventListener("click", () => {
+        window.__session.submit_t = now();
+      });
+    })();
+  </script>
+</body>
+</html>

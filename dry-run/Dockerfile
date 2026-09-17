@@ -33,6 +33,7 @@ COPY examples ./examples
 
 COPY dry-run/app.py ./dry-run/app.py
 COPY dry-run/static ./dry-run/static
+COPY dry-run/capture_real_automation.py ./dry-run/capture_real_automation.py
 
 ENV PYTHONPATH=/app
 ENV NOT_A_ROBOT_STORE=/app/dry-run-data

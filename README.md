@@ -464,6 +464,34 @@ the rest of the pipeline has example data to run against before you have
 real, labeled traffic. It is not a model of real bot or human behavior —
 replace it with your own data before relying on this for anything.
 
+### Validating against real automation, not just synthetic bots
+
+`dry-run/capture_real_automation.py` drives real Selenium sessions
+(`ActionChains` mouse movement, `send_keys()` typing, a direct
+`scrollTop` assignment for scrolling) against a local test page
+(`dry-run/static/capture.html`) and records whatever the browser's own
+event listeners actually captured — real automation telemetry, not an
+assumption about what "a scripted bot" looks like. A sample of 20
+captured sessions ships at `examples/data/real_selenium_sample.jsonl`.
+
+Comparing that real data against the synthetic archetypes' feature
+distributions found a genuine bug: `_bot_naive_session` hardcoded a
+15ms keystroke dwell/flight time, but real `send_keys()` fires
+keydown/keyup back-to-back in the same JS tick — actual dwell was
+~0.3ms, flight ~0.05ms, roughly 50x faster than the archetype assumed.
+That's now fixed to match the evidence.
+
+Before and after that fix, a `BotDetector` trained purely on
+`examples/synthetic_data.py` correctly classified **20/20** of the real
+captured Selenium sessions as bot (`score()` — P(human) — averaged
+0.11–0.37 across 5 independent training seeds, all well under the 0.5
+threshold). That's a genuinely reassuring result, but a narrow one: it
+validates generalization to exactly one automation profile (Selenium
+`ActionChains` + `send_keys` against a plain form), not to Playwright,
+Puppeteer, CDP-driven mouse paths, or any human-scale-jittered
+automation library. It is not the 10,000-session real-human benchmark
+this section still doesn't have — see the scope note above.
+
 ## Realistic value by scenario
 
 | Scenario | Value |

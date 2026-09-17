@@ -119,13 +119,23 @@ def _bot_naive_session(rng: random.Random) -> InteractionSession:
         for i in range(n + 1)
     ]
 
+    # Dwell/flight near zero, not a fixed 15ms: real Selenium send_keys()
+    # fires keydown/keyup back-to-back in the same JS tick with no
+    # artificial per-character delay, confirmed by capturing real
+    # ActionChains/send_keys sessions (see capture_real_automation.py) --
+    # observed dwell ~0.05-0.4ms, flight ~0.02-0.2ms. An earlier version
+    # of this archetype used a fixed 15ms/15ms, which is an order of
+    # magnitude slower than real automation and was empirically shown to
+    # make this archetype indistinguishable from human typing.
     keys = []
     kt = points[-1].t + 20.0
     for _ in range(rng.randint(5, 15)):
         down = kt
-        up = down + 15.0
+        dwell = _clip_positive(rng.gauss(0.3, 0.15), 0.02)
+        up = down + dwell
         keys.append(KeyEvent(down, up))
-        kt = up + 15.0
+        flight = _clip_positive(rng.gauss(0.1, 0.08), 0.01)
+        kt = up + flight
 
     click_events = [ClickEvent(410.0, 512.0, kt + 15.0)]
 
